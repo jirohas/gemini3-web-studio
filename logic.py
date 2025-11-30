@@ -137,6 +137,19 @@ def save_sessions(sessions):
 
 @st.cache_resource
 def get_client():
+    # Streamlit Cloud用の認証（Service Account）
+    if "GOOGLE_CREDENTIALS" in st.secrets:
+        from google.oauth2 import service_account
+        creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
+        creds = service_account.Credentials.from_service_account_info(creds_dict)
+        return genai.Client(
+            vertexai=True,
+            project=VERTEX_PROJECT,
+            location=VERTEX_LOCATION,
+            credentials=creds
+        )
+    
+    # ローカル環境用（ADC）
     return genai.Client(
         vertexai=True,
         project=VERTEX_PROJECT,
