@@ -295,29 +295,29 @@ with st.sidebar:
     # ---- 多層モード ----
     if mode_category == "🎯 回答モード(多層)":
         with st.expander("モード設定(多層)", expanded=True):
-            multilayer_mode_type = st.radio(
+            mode_type = st.radio(
                 "タイプ",
-                ["多層1", "多層2", "多層3"],
+                ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
                 index=0,
                 horizontal=True,
                 label_visibility="collapsed"
             )
             
-            if multilayer_mode_type == "多層1":
+            if mode_type == "選択1 (完全版)":
                 response_mode = st.radio(
                     "モード",
                     [
-                        "多層モードA",
-                        "多層モードB",
-                        "多層モードC",
+                        "2. 熟考 + 鬼軍曹",
+                        "3. 熟考 (メタ思考)",
+                        "β2. 熟考 (本気MAX)",
                     ],
                     index=0
                 )
-            elif multilayer_mode_type == "多層2":
+            elif mode_type == "選択2 (不完全版)":
                 response_mode = st.radio(
                     "モード",
                     [
-                        "多層モードD",
+                        "1. 熟考 (リサーチ)",
                     ],
                     index=0
                 )
@@ -325,7 +325,7 @@ with st.sidebar:
                 response_mode = st.radio(
                     "モード",
                     [
-                        "多層モードE",
+                        "β1. 通常 (高速)",
                     ],
                     index=0
                 )
