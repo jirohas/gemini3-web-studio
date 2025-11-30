@@ -359,7 +359,7 @@ with st.sidebar:
                         "3. 熟考 (メタ思考)",
                         "β2. 熟考 (本気MAX)",
                     ],
-                    index=0
+                    index=1  # デフォルトをメタ思考に変更
                 )
             elif mode_type == "選択2 (不完全版)":
                 response_mode = st.radio(
@@ -1201,10 +1201,63 @@ if prompt:
                             status_container.write("Phase 3b: Grok 鬼軍曹で最終チェック中...")
                             try:
                                 grok_answer = review_with_grok(prompt, final_answer)
-                                final_answer = grok_answer
+                                # Grok使用時は、モデル名を明示
+                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok Beta**\n\n---\n\n{grok_answer}"
                                 status_container.write("✓ Grok最終レビュー完了")
                             except Exception as e:
                                 status_container.write(f"⚠ Grokレビューエラー: {e}")
+                        else:
+                            # Geminiのみの場合もモデル名を表示（多層モードの場合）
+                            if mode_category == "🎯 回答モード(多層)":
+                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High)**\n\n---\n\n{final_answer}"
+                        
+                        # --- メタ思考モード: 結論を先出しする ---
+                        if "メタ思考" in response_mode:
+                            # 結論部分を抽出（簡易的な実装）
+                            # "結論"や"まとめ"などのセクションを探して先頭に移動
+                            lines = final_answer.split('\n')
+                            conclusion_start = -1
+                            for i, line in enumerate(lines):
+                                if any(keyword in line for keyword in ['## 結論', '## まとめ', '**結論**', '**まとめ**']):
+                                    conclusion_start = i
+                                    break
+                            
+                            if conclusion_start != -1:
+                                # 結論セクションを見つけた場合、それを先頭に移動
+                                conclusion_section = []
+                                other_content = lines[:conclusion_start]
+                                
+                                # 結論セクションの終わりを見つける（次の##まで or 文末）
+                                conclusion_end = len(lines)
+                                for i in range(conclusion_start + 1, len(lines)):
+                                    if lines[i].startswith('## ') and i != conclusion_start:
+                                        conclusion_end = i
+                                        break
+                                
+                                conclusion_section = lines[conclusion_start:conclusion_end]
+                                remaining_content = lines[conclusion_end:]
+                                
+                                # 再構成: モデル名 → 結論 → その他の詳細
+                                # モデル名部分を保持
+                                model_line = ""
+                                if lines[0].startswith("**🤖"):
+                                    model_line = lines[0]
+                                    other_content = lines[1:conclusion_start]
+                                
+                                final_answer = '\n'.join([
+                                    model_line,
+                                    "",
+                                    "---",
+                                    "",
+                                    "## 📌 結論（先出し）",
+                                    *conclusion_section[1:],  # 元の見出しを除く
+                                    "",
+                                    "---",
+                                    "",
+                                    "## 📝 詳細",
+                                    *other_content,
+                                    *remaining_content
+                                ]).strip()
                         
                         with status_container.expander("初版との比較", expanded=False):
                             st.markdown("**初版:**")
