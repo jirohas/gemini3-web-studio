@@ -107,9 +107,9 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
         f"Gemini の最終回答:\n{gemini_answer}\n\n"
         "**重要**: 調査メモに含まれる事実の方を、あなた自身の知識よりも優先してください。\n"
         "最新の情報が調査メモにある場合、それを信頼してください。\n\n"
-        "1. 明確な問題点の bullet list\n"
-        "2. **特に不確実性が高いポイント（前提不足、データ不足など）の bullet list**\n"
-        "3. 問題を修正した最終回答（全文）\n"
+        "1. **重大な事実誤認・論理飛躍の指摘**（なければ『特になし』）\n"
+        "2. **具体的な修正提案のリスト**（『修正前』→『修正後』の形式で）\n"
+        "3. **特に不確実性が高いポイント（前提不足、データ不足など）の bullet list**\n"
     )
     
     data = {
@@ -145,6 +145,48 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
 # =========================
 
 
+
+def think_with_grok(user_question: str, research_text: str) -> str:
+    """
+    Grok 4.1 Fast Free を使って、リサーチメモを元に独立した回答案を作成する
+    """
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    user_content = (
+        f"ユーザーの質問:\n{user_question}\n\n"
+        f"調査メモ:\n{research_text}\n\n"
+        "指示:\n"
+        "あなたはGeminiとは別の独立したAIです。\n"
+        "調査メモを参考にしつつ、あなた自身の視点でユーザーの質問に対する回答案を作成してください。\n"
+        "Geminiの意見に同調する必要はありません。独自の洞察や、Geminiが見落としがちな視点を提供してください。\n"
+    )
+    
+    data = {
+        "model": "x-ai/grok-4.1-fast:free",
+        "reasoning": {"enabled": True},
+        "messages": [
+            {
+                "role": "system",
+                "content": "あなたは独立した思考を持つAIアシスタントです。",
+            },
+            {
+                "role": "user",
+                "content": user_content,
+            },
+        ],
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Grok思考エラー: {str(e)}"
 
 def create_new_session():
     current_sessions = load_sessions()
@@ -1116,17 +1158,21 @@ if prompt:
                         with status_container.expander("生成されたメタ質問", expanded=False):
                             st.markdown(questions_text)
                         
-                        # コスト計算 (Phase 1.5)
-                        if question_resp.usage_metadata:
-                            cost = calculate_cost(
-                                model_id,
-                                question_resp.usage_metadata.prompt_token_count,
-                                question_resp.usage_metadata.candidates_token_count,
-                            )
-                            st.session_state.session_cost += cost
-                            usage_stats["total_cost_usd"] += cost
-                            usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
-                            usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
+                        st.session_state.session_cost += cost
+                        usage_stats["total_cost_usd"] += cost
+                        usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
+                        usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
+
+                    # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
+                    grok_thought = ""
+                    if enable_meta and OPENROUTER_API_KEY:
+                        status_container.write("Phase 1.5b: Grok 独立思考中...")
+                        try:
+                            grok_thought = think_with_grok(prompt, research_text)
+                            with status_container.expander("Grokの独立回答案", expanded=False):
+                                st.markdown(grok_thought)
+                        except Exception as e:
+                            status_container.write(f"⚠ Grok思考エラー: {e}")
 
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
@@ -1185,7 +1231,13 @@ if prompt:
                     )
                     
                     if enable_meta and questions_text:
-                        synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                        synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n"
+                    
+                    if enable_meta and grok_thought:
+                        synthesis_prompt_text += f"==== 別視点からの回答案 (Grok) ====\n{grok_thought}\n==== 別視点ここまで ====\n\n"
+                        synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. Grokの回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    elif enable_meta and questions_text:
+                        synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
                         synthesis_prompt_text += "上記メモを根拠に、最終回答を作成してください。**調査メモに含まれる最新の情報を必ず使用してください。**"
 
