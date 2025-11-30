@@ -288,21 +288,13 @@ with st.sidebar:
     with st.expander("🎯 回答モード", expanded=True):
         mode_type = st.radio(
             "タイプ",
-            ["gemini多層思考", "選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
+            ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
             index=0,
             horizontal=True,
             label_visibility="collapsed"
         )
         
-        if mode_type == "gemini多層思考":
-            response_mode = st.radio(
-                "モード",
-                [
-                    "gemini多層思考 (FIX版)",
-                ],
-                index=0
-            )
-        elif mode_type == "選択1 (完全版)":
+        if mode_type == "選択1 (完全版)":
             response_mode = st.radio(
                 "モード",
                 [
