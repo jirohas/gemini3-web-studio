@@ -190,6 +190,15 @@ def think_with_grok(user_question: str, research_text: str) -> str:
 
 def create_new_session():
     current_sessions = load_sessions()
+    
+    # 現在のセッションが空なら、新しく作らずにそれを再利用する（重複防止）
+    if st.session_state.get("current_session_id"):
+        for s in current_sessions:
+            if s["id"] == st.session_state.current_session_id:
+                if len(s["messages"]) == 0:
+                    st.toast("すでに新しいチャットです")
+                    return
+
     new_id = str(uuid.uuid4())
     new_session = {
         "id": new_id,
@@ -210,14 +219,22 @@ def switch_session(session_id):
 def update_current_session_messages(messages):
     if st.session_state.current_session_id:
         current_sessions = load_sessions()
-        for session in current_sessions:
+        target_index = -1
+        for i, session in enumerate(current_sessions):
             if session["id"] == st.session_state.current_session_id:
                 session["messages"] = messages
                 if session["title"] == "新しいチャット" and len(messages) > 0:
                     first_msg = messages[0]["content"]
                     session["title"] = (first_msg[:20] + "...") if len(first_msg) > 20 else first_msg
                 session["timestamp"] = datetime.datetime.now().isoformat()
+                target_index = i
                 break
+        
+        if target_index != -1:
+            # 最新のセッションをリストの先頭に移動
+            updated_session = current_sessions.pop(target_index)
+            current_sessions.insert(0, updated_session)
+            
         save_sessions(current_sessions)
         st.session_state.sessions = current_sessions
 
