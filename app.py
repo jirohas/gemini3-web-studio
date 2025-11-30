@@ -622,6 +622,16 @@ with st.sidebar:
 
     # ---- コスト表示 ----
     st.metric("Cost", f"${usage_stats['total_cost_usd']:.4f}")
+    
+    # 予算プログレスバー
+    MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "100.0"))
+    current_cost = usage_stats['total_cost_usd']
+    progress = min(current_cost / MAX_BUDGET_USD, 1.0)
+    st.progress(progress)
+    st.caption(f"予算: ${MAX_BUDGET_USD:.2f} (消化率: {progress*100:.1f}%)")
+    
+    st.link_button("💰 Google Cloud 残高確認", "https://console.cloud.google.com/billing")
+    
     if st.session_state.session_cost > 0:
         st.caption(f"Session: ${st.session_state.session_cost:.4f}")
 
