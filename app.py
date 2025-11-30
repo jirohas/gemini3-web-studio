@@ -77,7 +77,11 @@ if not st.session_state.authenticated:
 
 import requests
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+# OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
+if "OPENROUTER_API_KEY" in st.secrets:
+    OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+else:
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 def review_with_grok(user_question: str, gemini_answer: str) -> str:
     """
