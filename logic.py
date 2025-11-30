@@ -14,7 +14,10 @@ load_dotenv()
 
 USAGE_FILE = "usage_stats.json"
 SESSIONS_FILE = "chat_sessions.json"
+MANUAL_COST_FILE = "manual_cost.json"
 MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "100.0"))
+TRIAL_LIMIT_USD = float(os.getenv("TRIAL_LIMIT_USD", "300.0"))
+TRIAL_EXPIRY = os.getenv("TRIAL_EXPIRY", "2026-02-28")
 
 PRICING = {
     "gemini-3-pro-preview":   {"input": 2.0,   "output": 12.0},
@@ -28,23 +31,30 @@ VERTEX_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 VERTEX_LOCATION = "global"
 
 def load_usage():
-    # Streamlit Cloud では session_state を使用
-    if "usage_stats" not in st.session_state:
-        st.session_state.usage_stats = {
-            "total_input_tokens": 0, 
-            "total_output_tokens": 0, 
-            "total_cost_usd": 0.0
-        }
-    return st.session_state.usage_stats
+    if os.path.exists(USAGE_FILE):
+        with open(USAGE_FILE, "r") as f:
+            return json.load(f)
+    return {"total_input_tokens": 0, "total_output_tokens": 0, "total_cost_usd": 0.0}
 
 def save_usage(stats):
-    # session_state に保存（リアルタイム反映）
-    st.session_state.usage_stats = stats
+    with open(USAGE_FILE, "w") as f:
+        json.dump(stats, f, indent=4)
 
 def calculate_cost(model_id, input_tok, output_tok):
     price = PRICING.get(model_id, {"input": 0.0, "output": 0.0})
     cost = (input_tok / 1_000_000 * price["input"]) + (output_tok / 1_000_000 * price["output"])
     return cost
+
+def load_manual_cost():
+    if os.path.exists(MANUAL_COST_FILE):
+        with open(MANUAL_COST_FILE, "r") as f:
+            data = json.load(f)
+            return data.get("manual_cost_usd", 0.0)
+    return 0.0
+
+def save_manual_cost(cost_usd):
+    with open(MANUAL_COST_FILE, "w") as f:
+        json.dump({"manual_cost_usd": cost_usd}, f, indent=4)
 
 def get_mime_type(filename):
     ext = filename.split('.')[-1].lower()
