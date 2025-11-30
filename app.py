@@ -108,7 +108,8 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
         "**重要**: 調査メモに含まれる事実の方を、あなた自身の知識よりも優先してください。\n"
         "最新の情報が調査メモにある場合、それを信頼してください。\n\n"
         "1. 明確な問題点の bullet list\n"
-        "2. 問題を修正した最終回答（全文）\n"
+        "2. **特に不確実性が高いポイント（前提不足、データ不足など）の bullet list**\n"
+        "3. 問題を修正した最終回答（全文）\n"
     )
     
     data = {
@@ -1127,12 +1128,20 @@ if prompt:
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
                     
+                    import datetime as dt
+                    current_date = dt.datetime.now().strftime("%Y年%m月%d日")
+
                     if enable_meta:
-                        deep_instruction = base_system_instruction + """
+                        deep_instruction = base_system_instruction + f"""
 
 **あなたの役割**: 最終回答エージェント
 
 **タスク**: 調査メモとメタ質問への回答を根拠として、構造化された回答を作成してください。
+
+**重要 - 現在は{current_date}です**:
+- **調査メモに含まれる日付・事実を、あなたの学習データよりも絶対的に優先してください**
+- 「2025年」の情報が調査メモにある場合、それを正として扱ってください
+- 学習データが2024年以前で止まっていても、調査メモの最新情報を信頼すること
 
 **構成**:
 1. **深掘り考察**（メタ質問への回答）
@@ -1145,11 +1154,15 @@ if prompt:
 - 調査メモに含まれる最新の情報を優先的に使用すること
 """
                     else:
-                        deep_instruction = base_system_instruction + """
+                        deep_instruction = base_system_instruction + f"""
 
 **あなたの役割**: 最終回答エージェント
 
 **タスク**: 調査メモを唯一の根拠として、構造化された回答を作成してください。
+
+**重要 - 現在は{current_date}です**:
+- **調査メモに含まれる日付・事実を、あなたの学習データよりも絶対的に優先してください**
+- 「2025年」の情報が調査メモにある場合、それを正として扱ってください
 
 **構成**:
 1. **結論**（2-3行で明確に）
@@ -1162,7 +1175,11 @@ if prompt:
 - 古い情報と新しい情報が混在する場合は、新しい情報を優先すること
 """
                     
-                    synthesis_prompt_text = f"ユーザーの質問: {prompt}\n\n==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\n"
+                    synthesis_prompt_text = (
+                        f"重要: 今日は{current_date}です。古い情報を回答に含めないでください。\n\n"
+                        f"ユーザーの質問: {prompt}\n\n"
+                        f"==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\n"
+                    )
                     
                     if enable_meta and questions_text:
                         synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
