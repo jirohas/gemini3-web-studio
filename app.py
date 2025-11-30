@@ -1125,26 +1125,26 @@ if prompt:
                 # ---- グラウンディング情報 ----
                 if grounding_metadata:
                     st.markdown("---")
-                    st.subheader("📚 情報源と引用")
-                    if grounding_metadata.grounding_chunks:
-                        st.markdown("**検索結果から利用した情報源:**")
-                        unique_sources = {}
-                        import urllib.parse
+                    with st.expander("📚 情報源と引用", expanded=False):
+                        if grounding_metadata.grounding_chunks:
+                            st.markdown("**検索結果から利用した情報源:**")
+                            unique_sources = {}
+                            import urllib.parse
 
-                        for chunk in grounding_metadata.grounding_chunks:
-                            if getattr(chunk, "web", None):
-                                uri = getattr(chunk.web, "uri", None)
-                                title = getattr(chunk.web, "title", "情報源")
-                                if uri and uri not in unique_sources:
-                                    parsed = urllib.parse.urlparse(uri)
-                                    domain = parsed.netloc.replace("www.", "")
-                                    unique_sources[uri] = {
-                                        "title": title,
-                                        "domain": domain,
-                                    }
-                        for i, (uri, info) in enumerate(unique_sources.items(), 1):
-                            st.markdown(f"{i}. **[{info['title']}]({uri})**")
-                            st.caption(f"   出典: {info['domain']}")
+                            for chunk in grounding_metadata.grounding_chunks:
+                                if getattr(chunk, "web", None):
+                                    uri = getattr(chunk.web, "uri", None)
+                                    title = getattr(chunk.web, "title", "情報源")
+                                    if uri and uri not in unique_sources:
+                                        parsed = urllib.parse.urlparse(uri)
+                                        domain = parsed.netloc.replace("www.", "")
+                                        unique_sources[uri] = {
+                                            "title": title,
+                                            "domain": domain,
+                                        }
+                            for i, (uri, info) in enumerate(unique_sources.items(), 1):
+                                st.markdown(f"{i}. **[{info['title']}]({uri})**")
+                                st.caption(f"   出典: {info['domain']}")
 
                 messages.append({"role": "model", "content": final_answer})
                 update_current_session_messages(messages)
