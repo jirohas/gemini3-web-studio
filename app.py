@@ -284,79 +284,89 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # ---- 回答モード ----
-    with st.expander("🎯 回答モード", expanded=True):
-        mode_type = st.radio(
-            "タイプ",
-            ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
-            index=0,
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-        
-        if mode_type == "選択1 (完全版)":
-            response_mode = st.radio(
-                "モード",
-                [
-                    "2. 熟考 + 鬼軍曹",
-                    "3. 熟考 (メタ思考)",
-                    "β2. 熟考 (本気MAX)",
-                ],
-                index=0
-            )
-        elif mode_type == "選択2 (不完全版)":
-            response_mode = st.radio(
-                "モード",
-                [
-                    "1. 熟考 (リサーチ)",
-                ],
-                index=0
-            )
-        else:
-            response_mode = st.radio(
-                "モード",
-                [
-                    "β1. 通常 (高速)",
-                ],
-                index=0
-            )
+    # ---- モードカテゴリ選択 ----
+    mode_category = st.radio(
+        "使用するモード",
+        ["🎯 回答モード(多層)", "🎯 回答モード(通常)"],
+        index=0,
+        horizontal=True,
+    )
     
-    # ---- 回答モード(多層) ----
-    with st.expander("🎯回答モード(多層)", expanded=False):
-        multilayer_mode_type = st.radio(
-            "タイプ(多層)",
-            ["多層1", "多層2", "多層3"],
-            index=0,
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-        
-        if multilayer_mode_type == "多層1":
-            multilayer_response_mode = st.radio(
-                "モード(多層)",
-                [
-                    "多層モードA",
-                    "多層モードB",
-                    "多層モードC",
-                ],
-                index=0
+    # ---- 多層モード ----
+    if mode_category == "🎯 回答モード(多層)":
+        with st.expander("モード設定(多層)", expanded=True):
+            multilayer_mode_type = st.radio(
+                "タイプ",
+                ["多層1", "多層2", "多層3"],
+                index=0,
+                horizontal=True,
+                label_visibility="collapsed"
             )
-        elif multilayer_mode_type == "多層2":
-            multilayer_response_mode = st.radio(
-                "モード(多層)",
-                [
-                    "多層モードD",
-                ],
-                index=0
+            
+            if multilayer_mode_type == "多層1":
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "多層モードA",
+                        "多層モードB",
+                        "多層モードC",
+                    ],
+                    index=0
+                )
+            elif multilayer_mode_type == "多層2":
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "多層モードD",
+                    ],
+                    index=0
+                )
+            else:
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "多層モードE",
+                    ],
+                    index=0
+                )
+    
+    # ---- 通常モード ----
+    else:
+        with st.expander("モード設定(通常)", expanded=True):
+            mode_type = st.radio(
+                "タイプ",
+                ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
+                index=0,
+                horizontal=True,
+                label_visibility="collapsed"
             )
-        else:
-            multilayer_response_mode = st.radio(
-                "モード(多層)",
-                [
-                    "多層モードE",
-                ],
-                index=0
-            )
+            
+            if mode_type == "選択1 (完全版)":
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "2. 熟考 + 鬼軍曹",
+                        "3. 熟考 (メタ思考)",
+                        "β2. 熟考 (本気MAX)",
+                    ],
+                    index=0
+                )
+            elif mode_type == "選択2 (不完全版)":
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "1. 熟考 (リサーチ)",
+                    ],
+                    index=0
+                )
+            else:
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "β1. 通常 (高速)",
+                    ],
+                    index=0
+                )
     
     strict_mode = False
     
