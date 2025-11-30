@@ -141,12 +141,15 @@ def get_client():
     if "GOOGLE_CREDENTIALS" in st.secrets:
         from google.oauth2 import service_account
         creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
-        creds = service_account.Credentials.from_service_account_info(creds_dict)
+        scoped_creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
         return genai.Client(
             vertexai=True,
             project=VERTEX_PROJECT,
             location=VERTEX_LOCATION,
-            credentials=creds
+            credentials=scoped_creds
         )
     
     # ローカル環境用（ADC）
