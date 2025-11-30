@@ -72,6 +72,54 @@ if not st.session_state.authenticated:
 # Moved to logic.py
 
 # =========================
+# Grok Review Function (OpenRouter API)
+# =========================
+
+import requests
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+def review_with_grok(user_question: str, gemini_answer: str) -> str:
+    """
+    Grok 4.1 Fast Free を使って、Geminiの回答を最終レビューする
+    """
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": "x-ai/grok-beta:free",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "あなたは厳格なレビューアです。"
+                    "事実誤認・論理の飛躍・抜け漏れを容赦なく指摘し、"
+                    "必要なら回答を全文書き直してください。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"ユーザーの質問:\n{user_question}\n\n"
+                    f"Gemini の回答:\n{gemini_answer}\n\n"
+                    "1. 明確な問題点の bullet list\n"
+                    "2. 問題を修正した最終回答（全文）\n"
+                    "だけを日本語で出してください。"
+                ),
+            },
+        ],
+    }
+    try:
+        resp = requests.post(url, headers=headers, json=data, timeout=60)
+        resp.raise_for_status()
+        j = resp.json()
+        return j["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"[Grokレビューエラー: {e}]\n\n{gemini_answer}"
+
+# =========================
 # Session Management
 # =========================
 
@@ -1145,6 +1193,19 @@ if prompt:
                         final_answer = extract_text_from_response(review_resp)
                         
                         status_container.write("✓ レビュー完了")
+                        
+                        # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 本気MAX のみ) ---
+                        use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and "MAX" in response_mode)
+                        
+                        if use_grok_reviewer and OPENROUTER_API_KEY:
+                            status_container.write("Phase 3b: Grok 鬼軍曹で最終チェック中...")
+                            try:
+                                grok_answer = review_with_grok(prompt, final_answer)
+                                final_answer = grok_answer
+                                status_container.write("✓ Grok最終レビュー完了")
+                            except Exception as e:
+                                status_container.write(f"⚠ Grokレビューエラー: {e}")
+                        
                         with status_container.expander("初版との比較", expanded=False):
                             st.markdown("**初版:**")
                             st.markdown(draft_answer[:500] + "..." if len(draft_answer) > 500 else draft_answer)
