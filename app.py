@@ -1084,6 +1084,9 @@ if prompt:
                             temperature=0.1,
                             candidate_count=1,
                             system_instruction=reviewer_instruction,
+                            thinking_config=types.ThinkingConfig(
+                                thinking_level=types.ThinkingLevel.HIGH
+                            ),
                         )
                         
                         review_resp = client.models.generate_content(
