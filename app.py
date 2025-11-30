@@ -770,7 +770,6 @@ st.markdown("""
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             transition: all 0.3s ease;
             font-size: 20px;
-            text-decoration: none !important;
         }
         .scroll-btn:hover {
             background-color: #e0e2e6;
@@ -780,8 +779,8 @@ st.markdown("""
     </style>
     
     <div class="scroll-btn-container">
-        <a href="#" class="scroll-btn" id="scroll-top-btn" title="Top">⬆️</a>
-        <a href="#" class="scroll-btn" id="scroll-bottom-btn" title="Bottom">⬇️</a>
+        <button class="scroll-btn" id="scroll-top-btn" title="Top">⬆️</button>
+        <button class="scroll-btn" id="scroll-bottom-btn" title="Bottom">⬇️</button>
     </div>
     <script>
         // Streamlitのmainコンテナを取得
