@@ -89,7 +89,7 @@ def review_with_grok(user_question: str, gemini_answer: str) -> str:
         "Content-Type": "application/json",
     }
     data = {
-        "model": "x-ai/grok-beta:free",
+        "model": "x-ai/grok-4.1-fast:free",
         "messages": [
             {
                 "role": "system",
@@ -1194,15 +1194,16 @@ if prompt:
                         
                         status_container.write("✓ レビュー完了")
                         
-                        # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 本気MAX のみ) ---
-                        use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and "MAX" in response_mode)
+                        # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 鬼軍曹モード全般) ---
+                        # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
+                        use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and enable_strict)
                         
                         if use_grok_reviewer and OPENROUTER_API_KEY:
-                            status_container.write("Phase 3b: Grok 鬼軍曹で最終チェック中...")
+                            status_container.write("Phase 3b: Grok 4.1 Fast で最終チェック中...")
                             try:
                                 grok_answer = review_with_grok(prompt, final_answer)
                                 # Grok使用時は、モデル名を明示
-                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok Beta**\n\n---\n\n{grok_answer}"
+                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok 4.1 Fast**\n\n---\n\n{grok_answer}"
                                 status_container.write("✓ Grok最終レビュー完了")
                             except Exception as e:
                                 status_container.write(f"⚠ Grokレビューエラー: {e}")
