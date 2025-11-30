@@ -539,6 +539,9 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
     
+    # タイムスタンプで降順ソート（最新が先頭）
+    filtered_sessions.sort(key=lambda s: s.get("timestamp", ""), reverse=True)
+    
     # 直近5件と過去アーカイブに分割
     recent_sessions = filtered_sessions[:5] if len(filtered_sessions) > 5 else filtered_sessions
     archive_sessions = filtered_sessions[5:] if len(filtered_sessions) > 5 else []
@@ -694,6 +697,24 @@ for idx, msg in enumerate(messages):
                     st.caption("✅ 高評価")
                 elif current_rating == -1:
                     st.caption("❌ 低評価")
+
+# スクロールボタン（長いチャット用）
+if len(messages) > 5:
+    st.markdown("""
+    <div style="position: fixed; right: 20px; bottom: 100px; z-index: 999;">
+        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" 
+                style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
+                       border: 2px solid #ccc; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+            ⬆️
+        </button>
+        <button onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'})" 
+                style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
+                       border: 2px solid #ccc; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+            ⬇️
+        </button>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # =========================
 # 画像生成ハンドリング
