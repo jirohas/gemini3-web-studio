@@ -621,40 +621,28 @@ with st.sidebar:
     st.markdown("---")
 
     # ---- コスト表示 ----
-    st.metric("Cost", f"${usage_stats['total_cost_usd']:.4f}")
+    from logic import load_manual_cost, save_manual_cost, MAX_BUDGET_USD, TRIAL_LIMIT_USD, TRIAL_EXPIRY
     
-    # 予算プログレスバー
-    MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "100.0"))
+    st.subheader("💰 Cost")
+    st.caption(f"予算: ${MAX_BUDGET_USD:.2f}")
+    st.caption(f"上限: ${TRIAL_LIMIT_USD:.2f}")
+    st.caption(f"有効期限: {TRIAL_EXPIRY}")
     
-    # 手動コスト入力（セッションごとのリセット対策）
-    with st.expander("💰 コスト調整 (手動入力)", expanded=False):
-        manual_cost = st.number_input(
-            "現在のGoogle Cloudコスト ($)",
-            min_value=0.0,
-            value=st.session_state.get("manual_cost_offset", 0.0),
-            step=0.1,
-            format="%.2f",
-            key="manual_cost_input",
-            help="Google Cloud Consoleで確認した実際のコストを入力してください。予算バーに反映されます。"
-        )
-        # 入力値をsession_stateに保存
-        st.session_state.manual_cost_offset = manual_cost
-
-    current_session_cost = usage_stats['total_cost_usd']
-    total_estimated_cost = current_session_cost + manual_cost
+    # 手動コスト入力（永続化）
+    current_manual_cost = load_manual_cost()
+    manual_cost = st.number_input(
+        "手動入力 ($)",
+        min_value=0.0,
+        value=current_manual_cost,
+        step=0.1,
+        format="%.2f",
+        key="manual_cost_persistent",
+        help="Google Cloud Consoleで確認した実際のコストを入力してください。この値はブラウザを閉じても保持されます。"
+    )
     
-    progress = min(total_estimated_cost / MAX_BUDGET_USD, 1.0)
-    st.progress(progress)
-    st.caption(f"予算: ${MAX_BUDGET_USD:.2f} (消化率: {progress*100:.1f}%)")
-    st.caption(f"累積(手動+Session): ${total_estimated_cost:.4f}")
-    
-    st.link_button("💰 Google Cloud 残高確認", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
-    
-    if st.session_state.session_cost > 0:
-        st.caption(f"Session: ${st.session_state.session_cost:.4f}")
-
-    if stop_generation:
-        st.error(f"⚠️ 予算上限 (${MAX_BUDGET_USD}) 到達")
+    # 値が変更されたら保存
+    if manual_cost != current_manual_cost:
+        save_manual_cost(manual_cost)
 
     st.markdown("---")
     st.code(f"PROJECT: {VERTEX_PROJECT}\nLOCATION: {VERTEX_LOCATION} (Vertex AI)")
