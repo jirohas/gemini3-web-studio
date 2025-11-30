@@ -321,6 +321,43 @@ with st.sidebar:
                 index=0
             )
     
+    # ---- 回答モード(多層) ----
+    with st.expander("🎯回答モード(多層)", expanded=False):
+        multilayer_mode_type = st.radio(
+            "タイプ(多層)",
+            ["多層1", "多層2", "多層3"],
+            index=0,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+        if multilayer_mode_type == "多層1":
+            multilayer_response_mode = st.radio(
+                "モード(多層)",
+                [
+                    "多層モードA",
+                    "多層モードB",
+                    "多層モードC",
+                ],
+                index=0
+            )
+        elif multilayer_mode_type == "多層2":
+            multilayer_response_mode = st.radio(
+                "モード(多層)",
+                [
+                    "多層モードD",
+                ],
+                index=0
+            )
+        else:
+            multilayer_response_mode = st.radio(
+                "モード(多層)",
+                [
+                    "多層モードE",
+                ],
+                index=0
+            )
+    
     strict_mode = False
     
     # ---- 設定 (モデルなど) ----
