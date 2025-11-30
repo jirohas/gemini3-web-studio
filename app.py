@@ -780,13 +780,31 @@ st.markdown("""
     </style>
     
     <div class="scroll-btn-container">
-        <a href="#" class="scroll-btn" title="Top" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">⬆️</a>
-        <a href="#bottom-anchor" class="scroll-btn" title="Bottom" onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}); return false;">⬇️</a>
+        <a href="#" class="scroll-btn" id="scroll-top-btn" title="Top">⬆️</a>
+        <a href="#" class="scroll-btn" id="scroll-bottom-btn" title="Bottom">⬇️</a>
     </div>
-    <div id="bottom-anchor"></div>
     <script>
-        // 自動スクロール (オプション)
-        // window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+        // Streamlitのmainコンテナを取得
+        function getMainContainer() {
+            return document.querySelector('section[data-testid="stAppViewContainer"]') || 
+                   document.querySelector('section.main') || 
+                   document.querySelector('.main') ||
+                   document.documentElement;
+        }
+        
+        // 最上部にスクロール
+        document.getElementById('scroll-top-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            const container = getMainContainer();
+            container.scrollTo({top: 0, behavior: 'smooth'});
+        });
+        
+        // 最下部にスクロール
+        document.getElementById('scroll-bottom-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            const container = getMainContainer();
+            container.scrollTo({top: container.scrollHeight, behavior: 'smooth'});
+        });
     </script>
     """, unsafe_allow_html=True)
 
