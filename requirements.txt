@@ -1,0 +1,6 @@
+streamlit
+google-genai
+python-dotenv
+youtube-transcript-api
+Pillow
+st-img-pastebutton
