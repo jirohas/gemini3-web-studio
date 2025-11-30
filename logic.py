@@ -28,14 +28,18 @@ VERTEX_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 VERTEX_LOCATION = "global"
 
 def load_usage():
-    if os.path.exists(USAGE_FILE):
-        with open(USAGE_FILE, "r") as f:
-            return json.load(f)
-    return {"total_input_tokens": 0, "total_output_tokens": 0, "total_cost_usd": 0.0}
+    # Streamlit Cloud では session_state を使用
+    if "usage_stats" not in st.session_state:
+        st.session_state.usage_stats = {
+            "total_input_tokens": 0, 
+            "total_output_tokens": 0, 
+            "total_cost_usd": 0.0
+        }
+    return st.session_state.usage_stats
 
 def save_usage(stats):
-    with open(USAGE_FILE, "w") as f:
-        json.dump(stats, f, indent=4)
+    # session_state に保存（リアルタイム反映）
+    st.session_state.usage_stats = stats
 
 def calculate_cost(model_id, input_tok, output_tok):
     price = PRICING.get(model_id, {"input": 0.0, "output": 0.0})
