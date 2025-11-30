@@ -621,23 +621,23 @@ with st.sidebar:
     st.markdown("---")
 
     # ---- コスト表示 ----
-    from logic import load_manual_cost, save_manual_cost, MAX_BUDGET_USD, TRIAL_LIMIT_USD, TRIAL_EXPIRY
+    from logic import load_manual_cost, save_manual_cost, MAX_BUDGET_JPY, TRIAL_LIMIT_JPY, TRIAL_EXPIRY
     
     st.subheader("💰 Cost")
-    st.caption(f"予算: ${MAX_BUDGET_USD:.2f}")
-    st.caption(f"上限: ${TRIAL_LIMIT_USD:.2f}")
+    st.caption(f"予算: ¥{MAX_BUDGET_JPY:,.0f}")
+    st.caption(f"上限: ¥{TRIAL_LIMIT_JPY:,.0f}")
     st.caption(f"有効期限: {TRIAL_EXPIRY}")
     
     # 手動コスト入力（永続化）
     current_manual_cost = load_manual_cost()
     manual_cost = st.number_input(
-        "手動入力 ($)",
+        "手動入力 (¥)",
         min_value=0.0,
         value=current_manual_cost,
-        step=0.1,
-        format="%.2f",
+        step=10.0,
+        format="%.0f",
         key="manual_cost_persistent",
-        help="Google Cloud Consoleで確認した実際のコストを入力してください。この値はブラウザを閉じても保持されます。"
+        help="Google Cloud Consoleで確認した実際のコスト（円）を入力してください。この値はブラウザを閉じても保持されます。"
     )
     
     # 値が変更されたら保存
