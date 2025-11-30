@@ -113,6 +113,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
     
     data = {
         "model": "x-ai/grok-4.1-fast:free",
+        "reasoning": {"enabled": True},  # Enable multi-step reasoning for deeper review
         "messages": [
             {
                 "role": "system",
@@ -323,6 +324,7 @@ with st.sidebar:
         )
 
     # クリップボード（Expanderの外に出す）
+    pasted_image_bytes = None  # 初期化してNameErrorを防ぐ
     if paste:
         if "paste_key" not in st.session_state:
             st.session_state.paste_key = 0
@@ -919,7 +921,8 @@ if prompt:
                 # =========================
                 # モード設定の解析
                 # =========================
-                enable_research = True  # 全モードでリサーチを実行
+                # β1通常モード以外はリサーチを実行
+                enable_research = "β1" not in response_mode
                 enable_meta = "メタ" in response_mode or "MAX" in response_mode
                 enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
 
@@ -1018,7 +1021,12 @@ if prompt:
                     past_context = get_relevant_context(prompt, st.session_state.sessions, st.session_state.current_session_id)
                     
                     # リサーチ用のコンテンツを構築
-                    research_parts = [types.Part(text=f"この質問に答えるための調査メモを作成してください：\n{prompt}")]
+                    import datetime as dt
+                    current_date = dt.datetime.now().strftime("%Y年%m月%d日")
+                    research_parts = [types.Part(text=(
+                        f"重要: 今日は{current_date}です。この日付より新しい情報を優先してください。\n\n"
+                        f"質問: {prompt}"
+                    ))]
                     
                     if past_context:
                         research_parts.insert(0, types.Part(text="以下は過去の関連チャットから抽出したコンテキストです：\n\n" + past_context))
@@ -1028,7 +1036,7 @@ if prompt:
                     ]
                     
                     research_config = types.GenerateContentConfig(
-                        temperature=0.2,
+                        temperature=0.4,  # 最新情報を柔軟に採用するため0.2→0.4に上昇
                         candidate_count=1,
                         tools=tools,
                         system_instruction=research_instruction,
@@ -1261,14 +1269,21 @@ if prompt:
                             try:
                                 grok_answer = review_with_grok(prompt, final_answer, research_text)
                                 # Grok使用時は、モデル名を明示
-                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok 4.1 Fast**\n**モード: {response_mode}**\n\n---\n\n{grok_answer}"
+                                final_answer = (
+                                    f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
+                                    f"**レビュア: Grok 4.1 Fast (free)**\n"
+                                    f"**モード: {response_mode}**\n\n---\n\n{grok_answer}"
+                                )
                                 status_container.write("✓ Grok最終レビュー完了")
                             except Exception as e:
                                 status_container.write(f"⚠ Grokレビューエラー: {e}")
                         else:
                             # Geminiのみの場合もモデル名を表示（多層モードの場合）
                             if mode_category == "🎯 回答モード(多層)":
-                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High)**\n**モード: {response_mode}**\n\n---\n\n{final_answer}"
+                                final_answer = (
+                                    f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
+                                    f"**モード: {response_mode}**\n\n---\n\n{final_answer}"
+                                )
                         
                         # --- メタ思考モード: 結論を先出しする ---
                         if "メタ思考" in response_mode:
