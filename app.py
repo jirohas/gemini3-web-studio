@@ -744,6 +744,52 @@ st.markdown(
     "以下に質問を入力してください。マルチターン会話、ファイルアップロード、YouTube分析、検索グラウンディングに対応しています。"
 )
 
+# ---- スクロールボタン (Floating) ----
+st.markdown("""
+    <style>
+        .scroll-btn-container {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .scroll-btn {
+            background-color: #f0f2f6;
+            color: #31333F;
+            border: 1px solid #d6d6d8;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            font-size: 20px;
+            text-decoration: none !important;
+        }
+        .scroll-btn:hover {
+            background-color: #e0e2e6;
+            transform: scale(1.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+    
+    <div class="scroll-btn-container">
+        <a href="#" class="scroll-btn" title="Top" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">⬆️</a>
+        <a href="#bottom-anchor" class="scroll-btn" title="Bottom" onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}); return false;">⬇️</a>
+    </div>
+    <div id="bottom-anchor"></div>
+    <script>
+        // 自動スクロール (オプション)
+        // window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+    </script>
+    """, unsafe_allow_html=True)
+
 # ---- Vertex AI Client ----
 
 
