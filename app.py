@@ -78,20 +78,39 @@ if not st.session_state.authenticated:
 import requests
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
-if "OPENROUTER_API_KEY" in st.secrets:
-    OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
-else:
+try:
+    if "OPENROUTER_API_KEY" in st.secrets:
+        OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+    else:
+        OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+except:
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-def review_with_grok(user_question: str, gemini_answer: str) -> str:
+def review_with_grok(user_question: str, gemini_answer: str, research_text: str = None) -> str:
     """
     Grok 4.1 Fast Free を使って、Geminiの回答を最終レビューする
+    research_text: Geminiが収集した調査メモ（最新情報を含む）
     """
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
     }
+    
+    # プロンプトの構築
+    user_content = f"ユーザーの質問:\n{user_question}\n\n"
+    
+    if research_text:
+        user_content += f"Gemini の調査メモ（最新情報）:\n{research_text}\n\n"
+    
+    user_content += (
+        f"Gemini の最終回答:\n{gemini_answer}\n\n"
+        "**重要**: 調査メモに含まれる事実の方を、あなた自身の知識よりも優先してください。\n"
+        "最新の情報が調査メモにある場合、それを信頼してください。\n\n"
+        "1. 明確な問題点の bullet list\n"
+        "2. 問題を修正した最終回答（全文）\n"
+    )
+    
     data = {
         "model": "x-ai/grok-4.1-fast:free",
         "messages": [
@@ -105,11 +124,7 @@ def review_with_grok(user_question: str, gemini_answer: str) -> str:
             },
             {
                 "role": "user",
-                "content": (
-                    f"ユーザーの質問:\n{user_question}\n\n"
-                    f"Gemini の回答:\n{gemini_answer}\n\n"
-                    "1. 明確な問題点の bullet list\n"
-                    "2. 問題を修正した最終回答（全文）\n"
+                "content": user_content.strip() + (
                     "だけを日本語で出してください。"
                 ),
             },
@@ -1244,7 +1259,7 @@ if prompt:
                         if use_grok_reviewer and OPENROUTER_API_KEY:
                             status_container.write("Phase 3b: Grok 4.1 Fast で最終チェック中...")
                             try:
-                                grok_answer = review_with_grok(prompt, final_answer)
+                                grok_answer = review_with_grok(prompt, final_answer, research_text)
                                 # Grok使用時は、モデル名を明示
                                 final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok 4.1 Fast**\n**モード: {response_mode}**\n\n---\n\n{grok_answer}"
                                 status_container.write("✓ Grok最終レビュー完了")
