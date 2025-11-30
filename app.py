@@ -1340,11 +1340,17 @@ if prompt:
                             status_container.write("Phase 3b: Grok 4.1 Fast で最終チェック中...")
                             try:
                                 grok_answer = review_with_grok(prompt, final_answer, research_text)
-                                # Grok使用時は、モデル名を明示
+                                # Grok使用時は、モデル名を明示し、2段構成で表示
                                 final_answer = (
                                     f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
                                     f"**レビュア: Grok 4.1 Fast (free)**\n"
-                                    f"**モード: {response_mode}**\n\n---\n\n{grok_answer}"
+                                    f"**モード: {response_mode}**\n\n"
+                                    "---\n\n"
+                                    "## ✅ 最終回答（Gemini統合版）\n\n"
+                                    f"{final_answer}\n\n"
+                                    "---\n\n"
+                                    "## 🔍 Grok によるレビュー\n\n"
+                                    f"{grok_answer}"
                                 )
                                 status_container.write("✓ Grok最終レビュー完了")
                             except Exception as e:
