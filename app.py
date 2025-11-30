@@ -783,27 +783,43 @@ st.markdown("""
         <button class="scroll-btn" id="scroll-bottom-btn" title="Bottom">⬇️</button>
     </div>
     <script>
-        // Streamlitのmainコンテナを取得
-        function getMainContainer() {
-            return document.querySelector('section[data-testid="stAppViewContainer"]') || 
-                   document.querySelector('section.main') || 
-                   document.querySelector('.main') ||
-                   document.documentElement;
+        // Streamlitはiframe内で実行される場合があるため、親ウィンドウのスクロールも考慮
+        function scrollStreamlit(direction) {
+            const container = window.parent.document.querySelector('section[data-testid="stAppViewContainer"]') || 
+                              window.parent.document.querySelector('.main') ||
+                              document.querySelector('section[data-testid="stAppViewContainer"]') || 
+                              document.documentElement;
+            
+            if (container) {
+                if (direction === 'top') {
+                    container.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    container.scrollTo({top: container.scrollHeight, behavior: 'smooth'});
+                }
+            } else {
+                console.log("Scroll container not found");
+            }
         }
-        
-        // 最上部にスクロール
-        document.getElementById('scroll-top-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            const container = getMainContainer();
-            container.scrollTo({top: 0, behavior: 'smooth'});
-        });
-        
-        // 最下部にスクロール
-        document.getElementById('scroll-bottom-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            const container = getMainContainer();
-            container.scrollTo({top: container.scrollHeight, behavior: 'smooth'});
-        });
+
+        // ボタンにイベントリスナーを設定（DOMロード待ち）
+        setTimeout(function() {
+            const topBtn = document.getElementById('scroll-top-btn');
+            const bottomBtn = document.getElementById('scroll-bottom-btn');
+            
+            if (topBtn) {
+                topBtn.onclick = function(e) {
+                    e.preventDefault();
+                    scrollStreamlit('top');
+                };
+            }
+            
+            if (bottomBtn) {
+                bottomBtn.onclick = function(e) {
+                    e.preventDefault();
+                    scrollStreamlit('bottom');
+                };
+            }
+        }, 1000); // 1秒遅延させて確実に要素を取得
     </script>
     """, unsafe_allow_html=True)
 
