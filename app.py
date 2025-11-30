@@ -1207,14 +1207,14 @@ if prompt:
                             try:
                                 grok_answer = review_with_grok(prompt, final_answer)
                                 # Grok使用時は、モデル名を明示
-                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok 4.1 Fast**\n\n---\n\n{grok_answer}"
+                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High) → Grok 4.1 Fast**\n**モード: {response_mode}**\n\n---\n\n{grok_answer}"
                                 status_container.write("✓ Grok最終レビュー完了")
                             except Exception as e:
                                 status_container.write(f"⚠ Grokレビューエラー: {e}")
                         else:
                             # Geminiのみの場合もモデル名を表示（多層モードの場合）
                             if mode_category == "🎯 回答モード(多層)":
-                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High)**\n\n---\n\n{final_answer}"
+                                final_answer = f"**🤖 使用モデル: Gemini 3 Pro (High)**\n**モード: {response_mode}**\n\n---\n\n{final_answer}"
                         
                         # --- メタ思考モード: 結論を先出しする ---
                         if "メタ思考" in response_mode:
