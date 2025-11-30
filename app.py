@@ -630,7 +630,7 @@ with st.sidebar:
     st.progress(progress)
     st.caption(f"予算: ${MAX_BUDGET_USD:.2f} (消化率: {progress*100:.1f}%)")
     
-    st.link_button("💰 Google Cloud 残高確認", "https://console.cloud.google.com/billing")
+    st.link_button("💰 Google Cloud 残高確認", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
     
     if st.session_state.session_cost > 0:
         st.caption(f"Session: ${st.session_state.session_cost:.4f}")
