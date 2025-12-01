@@ -778,19 +778,65 @@ st.markdown("""
         }
     </style>
     
-    <div class="scroll-btn-container">
-        <button class="scroll-btn" id="scroll-top-btn" title="Top">⬆️</button>
-        <button class="scroll-btn" id="scroll-bottom-btn" title="Bottom">⬇️</button>
-    </div>
+# ---- スクロールボタン (Floating) ----
+st.markdown("""
+    <style>
+        .scroll-btn-container {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .scroll-btn {
+            background-color: #f0f2f6;
+            color: #31333F;
+            border: 1px solid #d6d6d8;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            font-size: 20px;
+            padding: 0;
+            line-height: 1;
+        }
+        .scroll-btn:hover {
+            background-color: #e0e2e6;
+            transform: scale(1.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+    
     <script>
-        // Streamlitはiframe内で実行される場合があるため、親ウィンドウのスクロールも考慮
         function scrollStreamlit(direction) {
-            const container = window.parent.document.querySelector('section[data-testid="stAppViewContainer"]') || 
-                              window.parent.document.querySelector('.main') ||
-                              document.querySelector('section[data-testid="stAppViewContainer"]') || 
-                              document.documentElement;
+            console.log("Scroll triggered: " + direction);
+            var container = null;
             
+            // 1. 親ウィンドウ（Streamlit Cloud等）のコンテナを探す
+            try {
+                if (window.parent && window.parent.document) {
+                    container = window.parent.document.querySelector('section[data-testid="stAppViewContainer"]');
+                }
+            } catch (e) {
+                console.log("Access to parent window denied: " + e);
+            }
+            
+            // 2. 親がダメなら現在のドキュメント内で探す
+            if (!container) {
+                container = document.querySelector('section[data-testid="stAppViewContainer"]') || 
+                            document.querySelector('.main') ||
+                            document.documentElement;
+            }
+
             if (container) {
+                console.log("Container found, scrolling...");
                 if (direction === 'top') {
                     container.scrollTo({top: 0, behavior: 'smooth'});
                 } else {
@@ -798,29 +844,20 @@ st.markdown("""
                 }
             } else {
                 console.log("Scroll container not found");
+                // フォールバック: window全体のスクロール
+                if (direction === 'top') {
+                    window.scrollTo({top: 0, behavior: 'smooth'});
+                } else {
+                    window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+                }
             }
         }
-
-        // ボタンにイベントリスナーを設定（DOMロード待ち）
-        setTimeout(function() {
-            const topBtn = document.getElementById('scroll-top-btn');
-            const bottomBtn = document.getElementById('scroll-bottom-btn');
-            
-            if (topBtn) {
-                topBtn.onclick = function(e) {
-                    e.preventDefault();
-                    scrollStreamlit('top');
-                };
-            }
-            
-            if (bottomBtn) {
-                bottomBtn.onclick = function(e) {
-                    e.preventDefault();
-                    scrollStreamlit('bottom');
-                };
-            }
-        }, 1000); // 1秒遅延させて確実に要素を取得
     </script>
+
+    <div class="scroll-btn-container">
+        <button class="scroll-btn" onclick="scrollStreamlit('top')" title="Top">⬆️</button>
+        <button class="scroll-btn" onclick="scrollStreamlit('bottom')" title="Bottom">⬇️</button>
+    </div>
     """, unsafe_allow_html=True)
 
 # ---- Vertex AI Client ----
