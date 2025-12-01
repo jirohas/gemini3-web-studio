@@ -44,6 +44,10 @@ def save_usage(stats):
         json.dump(stats, f, indent=4)
 
 def calculate_cost(model_id, input_tok, output_tok):
+    # None チェック：トークン数がNoneの場合は0として扱う
+    input_tok = input_tok or 0
+    output_tok = output_tok or 0
+    
     price = PRICING.get(model_id, {"input": 0.0, "output": 0.0})
     cost = (input_tok / 1_000_000 * price["input"]) + (output_tok / 1_000_000 * price["output"])
     return cost
