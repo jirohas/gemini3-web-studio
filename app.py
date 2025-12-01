@@ -76,6 +76,7 @@ if not st.session_state.authenticated:
 # =========================
 
 import requests
+from curl_cffi import requests as crequests  # Puter回避用
 # import asyncio  # putergenai削除に伴い不要
 # from putergenai import PuterClient  # 403エラー回避のため自前実装に変更
 
@@ -254,11 +255,12 @@ def call_claude_opus_via_puter(
     # トークンがない、または再試行が必要な場合のログイン関数
     def perform_login():
         try:
-            resp = requests.post(
+            resp = crequests.post(
                 "https://puter.com/login",
                 json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD},
                 headers=headers,
-                timeout=30
+                timeout=30,
+                impersonate="chrome110"
             )
             if resp.status_code != 200:
                 return None, f"[Claude Login Error] Status: {resp.status_code}, Msg: {resp.text[:100]}"
@@ -307,7 +309,7 @@ def call_claude_opus_via_puter(
         # 初回トライ
         auth_headers = headers.copy()
         auth_headers["Authorization"] = f"Bearer {token}"
-        chat_resp = requests.post(chat_url, json=payload, headers=auth_headers, timeout=120)
+        chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome110")
 
         # 401 Unauthorized (トークン切れ) の場合は再ログインしてリトライ
         if chat_resp.status_code == 401 or chat_resp.status_code == 403:
@@ -318,7 +320,7 @@ def call_claude_opus_via_puter(
             
             # リトライ
             auth_headers["Authorization"] = f"Bearer {token}"
-            chat_resp = requests.post(chat_url, json=payload, headers=auth_headers, timeout=120)
+            chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome110")
 
         if chat_resp.status_code != 200:
             return f"[Claude Chat Error] Status: {chat_resp.status_code}, Msg: {chat_resp.text[:100]}"
