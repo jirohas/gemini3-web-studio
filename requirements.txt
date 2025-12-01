@@ -5,3 +5,4 @@ youtube-transcript-api
 Pillow
 st-img-pastebutton
 requests
+putergenai
