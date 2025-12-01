@@ -567,7 +567,7 @@ with st.sidebar:
     mode_category = st.radio(
         "使用するモード",
         ["🎯 回答モード(多層)", "🎯 回答モード(通常)", "β：🎯 回答モード(多層+puter)"],
-        index=2,  # デフォルトをPuterモードに変更
+        index=0,  # デフォルトを多層モードに変更
         horizontal=True,
     )
     
@@ -591,7 +591,7 @@ with st.sidebar:
                         "3. (試験中)熟考 (本気MAX)",
                         "4. 熟考(メタ思考)+grok検索強化版",
                     ],
-                    index=1  # デフォルトをメタ思考に変更
+                    index=3  # デフォルトをgrok検索強化版に変更
                 )
             elif mode_type == "選択2 (不完全版)":
                 response_mode = st.radio(
