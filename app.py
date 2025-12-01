@@ -1430,20 +1430,28 @@ if prompt:
                     )
 
                     # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
+                    # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
                     grok_thought = ""
+                    grok_status = "skipped"
                     if enable_meta and OPENROUTER_API_KEY:
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
                         try:
                             grok_thought = think_with_grok(prompt, research_text)
                             if grok_thought:
+                                grok_status = "success"
                                 status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
                                 with status_container.expander("Grokの独立回答案", expanded=False):
                                     st.markdown(grok_thought)
+                            else:
+                                grok_status = "empty"
                         except Exception as e:
+                            grok_status = "error"
                             status_container.write(f"⚠ Grok思考エラー: {e}")
 
                     # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
+                    # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
                     claude_thought = ""
+                    claude_status = "skipped"
                     if is_puter_onigunsou and PUTER_USERNAME and PUTER_PASSWORD:
                         status_container.write("Phase 1.5c: Claude Opus 4.5 独立思考中...")
                         try:
@@ -1457,14 +1465,17 @@ if prompt:
                                     "Gemini の意見に合わせる必要はありません。"
                                 ),
                             )
-                            if claude_thought and not claude_thought.startswith("[Claude (puter) 認証情報未設定]"):
+                            if claude_thought and not claude_thought.startswith("[Claude"):
+                                claude_status = "success"
                                 status_container.write("✓ Claude Opus 4.5 (via Puter) 独立思考完了")
                                 with status_container.expander("Claude Opus 4.5 の独立回答案", expanded=False):
                                     st.markdown(claude_thought)
                             else:
-                                status_container.write("⚠ Claude: 認証情報未設定またはエラー")
+                                claude_status = "error"
+                                status_container.write(f"⚠ Claudeエラー: {claude_thought}")
                                 claude_thought = ""  # エラーの場合は空にする
                         except Exception as e:
+                            claude_status = "error"
                             status_container.write(f"⚠ Claude思考エラー: {e}")
                             claude_thought = ""
 
@@ -1739,10 +1750,22 @@ if prompt:
 
                 # モデル名を表示
                 models_used = [f"Gemini: {model_id}"]
-                if enable_meta and grok_thought:
-                    models_used.append("Grok: 4.1-fast-free")
-                if is_puter_onigunsou and claude_thought:
-                    models_used.append("Claude: Opus 4.5 (via Puter)")
+                
+                # Grok Status
+                if enable_meta:
+                    if grok_status == "success":
+                        models_used.append("Grok: 4.1-fast-free (OK)")
+                    elif grok_status == "error":
+                        models_used.append("Grok: 4.1-fast-free (Error)")
+                    elif grok_status == "empty":
+                        models_used.append("Grok: 4.1-fast-free (Empty)")
+                
+                # Claude Status
+                if is_puter_onigunsou:
+                    if claude_status == "success":
+                        models_used.append("Claude: Opus 4.5 (via Puter) (OK)")
+                    elif claude_status == "error":
+                        models_used.append("Claude: Opus 4.5 (via Puter) (Error)")
                 
                 st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
                 st.markdown(final_answer)
