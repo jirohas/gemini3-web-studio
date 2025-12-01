@@ -489,7 +489,7 @@ with st.sidebar:
     mode_category = st.radio(
         "使用するモード",
         ["🎯 回答モード(多層)", "🎯 回答モード(多層+puter)", "🎯 回答モード(通常)"],
-        index=0,
+        index=1,  # デフォルトを多層+puterに変更
         horizontal=True,
     )
     
@@ -550,7 +550,7 @@ with st.sidebar:
                         "2. 熟考 (メタ思考)",
                         "3. 熟考 (本気MAX)",
                     ],
-                    index=1  # デフォルトをメタ思考に変更
+                    index=0  # デフォルトを鬼軍曹に変更
                 )
             elif mode_type == "選択2 (不完全版)":
                 response_mode = st.radio(
@@ -1697,7 +1697,13 @@ if prompt:
                 status_container.update(label="完了！", state="complete", expanded=False)
 
                 # モデル名を表示
-                st.caption(f"🤖 使用モデル: {model_id}")
+                models_used = [f"Gemini: {model_id}"]
+                if enable_meta and grok_thought:
+                    models_used.append("Grok: 4.1-fast-free")
+                if is_puter_onigunsou and claude_thought:
+                    models_used.append("Claude: Opus 4.5 (via Puter)")
+                
+                st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
                 st.markdown(final_answer)
 
                 # ---- グラウンディング情報 ----
