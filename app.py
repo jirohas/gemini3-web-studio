@@ -76,8 +76,8 @@ if not st.session_state.authenticated:
 # =========================
 
 import requests
-import asyncio
-from putergenai import PuterClient
+# import asyncio  # putergenai削除に伴い不要
+# from putergenai import PuterClient  # 403エラー回避のため自前実装に変更
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
@@ -228,37 +228,70 @@ def call_claude_opus_via_puter(
 ) -> str:
     """
     Claude Opus 4.5（puter.com）で推論させる同期関数
+    putergenaiが403エラーになるため、requestsでヘッダー付きで直接叩く
     """
     if not PUTER_USERNAME or not PUTER_PASSWORD:
         return "[Claude (puter) 認証情報未設定]"
 
-    async def _run() -> str:
-        async with PuterClient() as client:
-            await client.login(PUTER_USERNAME, PUTER_PASSWORD)
+    # 1. Login
+    login_url = "https://puter.com/login"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Origin": "https://puter.com",
+        "Referer": "https://puter.com/login",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        # ログイン試行
+        resp = requests.post(login_url, json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD}, headers=headers, timeout=30)
+        if resp.status_code != 200:
+            return f"[Claude Login Error] Status: {resp.status_code}, Msg: {resp.text[:100]}"
+        
+        token = resp.json().get("token")
+        if not token:
+            return "[Claude Login Error] Token not found in response"
 
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
+        # 2. Chat
+        chat_url = "https://api.puter.com/drivers/call"
+        auth_headers = headers.copy()
+        auth_headers["Authorization"] = f"Bearer {token}"
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
 
-            user_content = f"ユーザーの質問:\n{user_question}\n\n"
-            if research_text:
-                user_content += f"調査メモ:\n{research_text}\n\n"
-                user_content += "この調査メモの事実を優先して回答してください。\n"
+        user_content = f"ユーザーの質問:\n{user_question}\n\n"
+        if research_text:
+            user_content += f"調査メモ:\n{research_text}\n\n"
+            user_content += "この調査メモの事実を優先して回答してください。\n"
 
-            messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": user_content})
+        
+        payload = {
+            "interface": "puter-chat-completion",
+            "driver": "claude",
+            "method": "complete",
+            "args": {
+                "messages": messages,
+                "model": "claude-opus-4-5",
+                "stream": False
+            }
+        }
 
-            result = await client.ai_chat(
-                messages=messages,
-                options={
-                    "model": "claude-opus-4-5",
-                    "stream": False,
-                },
-            )
+        chat_resp = requests.post(chat_url, json=payload, headers=auth_headers, timeout=120)
+        if chat_resp.status_code != 200:
+            return f"[Claude Chat Error] Status: {chat_resp.status_code}, Msg: {chat_resp.text[:100]}"
+            
+        result = chat_resp.json()
+        if not result.get("success", False):
+             return f"[Claude API Error] {result.get('error')}"
 
-            message = result["response"]["result"]["message"]
-            return _extract_puter_text(message.get("content"))
+        message = result["result"]["message"]
+        return _extract_puter_text(message.get("content"))
 
-    return asyncio.run(_run())
+    except Exception as e:
+        return f"[Claude Connection Error] {str(e)}"
 
 def create_new_session():
     current_sessions = load_sessions()
