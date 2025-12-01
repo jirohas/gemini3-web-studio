@@ -782,48 +782,65 @@ st.markdown("""
     </style>
     
     <script>
-        function scrollStreamlit(direction) {
+        window.scrollStreamlit = function(direction) {
             console.log("Scroll triggered: " + direction);
-            var container = null;
             
-            // 1. 親ウィンドウ（Streamlit Cloud等）のコンテナを探す
+            // ターゲットとなる可能性のある要素を順番に試す
+            var targets = [];
+            
             try {
                 if (window.parent && window.parent.document) {
-                    container = window.parent.document.querySelector('section[data-testid="stAppViewContainer"]');
+                    targets.push(window.parent.document.querySelector('section[data-testid="stAppViewContainer"]'));
+                    targets.push(window.parent.document.querySelector('.main'));
+                    targets.push(window.parent.document.documentElement);
                 }
             } catch (e) {
-                console.log("Access to parent window denied: " + e);
+                console.log("Access to parent window denied");
             }
             
-            // 2. 親がダメなら現在のドキュメント内で探す
-            if (!container) {
-                container = document.querySelector('section[data-testid="stAppViewContainer"]') || 
-                            document.querySelector('.main') ||
-                            document.documentElement;
-            }
+            // フォールバック（iframe内）
+            targets.push(document.querySelector('section[data-testid="stAppViewContainer"]'));
+            targets.push(document.documentElement);
 
-            if (container) {
-                console.log("Container found, scrolling...");
-                if (direction === 'top') {
-                    container.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    container.scrollTo({top: container.scrollHeight, behavior: 'smooth'});
+            var scrolled = false;
+            for (var i = 0; i < targets.length; i++) {
+                var el = targets[i];
+                if (el) {
+                    try {
+                        // スクロール可能な要素かチェック（簡易的）
+                        if (el.scrollHeight > el.clientHeight || el === window.parent.document.documentElement) {
+                            console.log("Scrolling element:", el);
+                            if (direction === 'top') {
+                                el.scrollTo({top: 0, behavior: 'smooth'});
+                            } else {
+                                el.scrollTo({top: el.scrollHeight, behavior: 'smooth'});
+                            }
+                            scrolled = true;
+                        }
+                    } catch (e) {
+                        console.error("Error scrolling element:", e);
+                    }
                 }
-            } else {
-                console.log("Scroll container not found");
-                // フォールバック: window全体のスクロール
-                if (direction === 'top') {
+            }
+            
+            if (!scrolled) {
+                console.log("No scrollable container found, trying window scroll");
+                try {
+                    if (direction === 'top') {
+                        window.parent.scrollTo({top: 0, behavior: 'smooth'});
+                    } else {
+                        window.parent.scrollTo({top: window.parent.document.body.scrollHeight, behavior: 'smooth'});
+                    }
+                } catch(e) {
                     window.scrollTo({top: 0, behavior: 'smooth'});
-                } else {
-                    window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
                 }
             }
         }
     </script>
 
     <div class="scroll-btn-container">
-        <button class="scroll-btn" onclick="scrollStreamlit('top')" title="Top">⬆️</button>
-        <button class="scroll-btn" onclick="scrollStreamlit('bottom')" title="Bottom">⬇️</button>
+        <button class="scroll-btn" onclick="window.scrollStreamlit('top')" title="Top">⬆️</button>
+        <button class="scroll-btn" onclick="window.scrollStreamlit('bottom')" title="Bottom">⬇️</button>
     </div>
     """, unsafe_allow_html=True)
 
