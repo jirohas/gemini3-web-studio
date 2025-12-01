@@ -1402,8 +1402,10 @@ if prompt:
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
                         try:
                             grok_thought = think_with_grok(prompt, research_text)
-                            with status_container.expander("Grokの独立回答案", expanded=False):
-                                st.markdown(grok_thought)
+                            if grok_thought:
+                                status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
+                                with status_container.expander("Grokの独立回答案", expanded=False):
+                                    st.markdown(grok_thought)
                         except Exception as e:
                             status_container.write(f"⚠ Grok思考エラー: {e}")
 
@@ -1422,10 +1424,16 @@ if prompt:
                                     "Gemini の意見に合わせる必要はありません。"
                                 ),
                             )
-                            with status_container.expander("Claude Opus 4.5 の独立回答案", expanded=False):
-                                st.markdown(claude_thought)
+                            if claude_thought and not claude_thought.startswith("[Claude (puter) 認証情報未設定]"):
+                                status_container.write("✓ Claude Opus 4.5 (via Puter) 独立思考完了")
+                                with status_container.expander("Claude Opus 4.5 の独立回答案", expanded=False):
+                                    st.markdown(claude_thought)
+                            else:
+                                status_container.write("⚠ Claude: 認証情報未設定またはエラー")
+                                claude_thought = ""  # エラーの場合は空にする
                         except Exception as e:
                             status_container.write(f"⚠ Claude思考エラー: {e}")
+                            claude_thought = ""
 
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
