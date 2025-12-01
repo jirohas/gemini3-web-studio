@@ -233,53 +233,93 @@ def call_claude_opus_via_puter(
     if not PUTER_USERNAME or not PUTER_PASSWORD:
         return "[Claude (puter) 認証情報未設定]"
 
-    # 1. Login
-    login_url = "https://puter.com/login"
+    # 1. Prepare Headers (Browser Masquerading)
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9,ja;q=0.8",
         "Origin": "https://puter.com",
         "Referer": "https://puter.com/login",
+        "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
         "Content-Type": "application/json"
     }
-    
-    try:
-        # ログイン試行
-        resp = requests.post(login_url, json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD}, headers=headers, timeout=30)
-        if resp.status_code != 200:
-            return f"[Claude Login Error] Status: {resp.status_code}, Msg: {resp.text[:100]}"
-        
-        token = resp.json().get("token")
-        if not token:
-            return "[Claude Login Error] Token not found in response"
 
-        # 2. Chat
-        chat_url = "https://api.puter.com/drivers/call"
+    token = st.session_state.get("puter_token")
+
+    # トークンがない、または再試行が必要な場合のログイン関数
+    def perform_login():
+        try:
+            resp = requests.post(
+                "https://puter.com/login",
+                json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD},
+                headers=headers,
+                timeout=30
+            )
+            if resp.status_code != 200:
+                return None, f"[Claude Login Error] Status: {resp.status_code}, Msg: {resp.text[:100]}"
+            
+            new_token = resp.json().get("token")
+            if not new_token:
+                return None, "[Claude Login Error] Token not found in response"
+            
+            return new_token, None
+        except Exception as e:
+            return None, f"[Claude Login Connection Error] {str(e)}"
+
+    # トークンがない場合はログイン
+    if not token:
+        token, error = perform_login()
+        if error:
+            return error
+        st.session_state.puter_token = token
+
+    # 2. Chat (with Retry logic for 401)
+    chat_url = "https://api.puter.com/drivers/call"
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    user_content = f"ユーザーの質問:\n{user_question}\n\n"
+    if research_text:
+        user_content += f"調査メモ:\n{research_text}\n\n"
+        user_content += "この調査メモの事実を優先して回答してください。\n"
+
+    messages.append({"role": "user", "content": user_content})
+    
+    payload = {
+        "interface": "puter-chat-completion",
+        "driver": "claude",
+        "method": "complete",
+        "args": {
+            "messages": messages,
+            "model": "claude-opus-4-5",
+            "stream": False
+        }
+    }
+
+    try:
+        # 初回トライ
         auth_headers = headers.copy()
         auth_headers["Authorization"] = f"Bearer {token}"
-        
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-
-        user_content = f"ユーザーの質問:\n{user_question}\n\n"
-        if research_text:
-            user_content += f"調査メモ:\n{research_text}\n\n"
-            user_content += "この調査メモの事実を優先して回答してください。\n"
-
-        messages.append({"role": "user", "content": user_content})
-        
-        payload = {
-            "interface": "puter-chat-completion",
-            "driver": "claude",
-            "method": "complete",
-            "args": {
-                "messages": messages,
-                "model": "claude-opus-4-5",
-                "stream": False
-            }
-        }
-
         chat_resp = requests.post(chat_url, json=payload, headers=auth_headers, timeout=120)
+
+        # 401 Unauthorized (トークン切れ) の場合は再ログインしてリトライ
+        if chat_resp.status_code == 401 or chat_resp.status_code == 403:
+            token, error = perform_login()
+            if error:
+                return error
+            st.session_state.puter_token = token
+            
+            # リトライ
+            auth_headers["Authorization"] = f"Bearer {token}"
+            chat_resp = requests.post(chat_url, json=payload, headers=auth_headers, timeout=120)
+
         if chat_resp.status_code != 200:
             return f"[Claude Chat Error] Status: {chat_resp.status_code}, Msg: {chat_resp.text[:100]}"
             
