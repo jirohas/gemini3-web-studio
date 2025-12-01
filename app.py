@@ -163,9 +163,10 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
 
 
 
-def think_with_grok(user_question: str, research_text: str) -> str:
+def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False) -> str:
     """
     Grok 4.1 Fast Free を使って、リサーチメモを元に独立した回答案を作成する
+    enable_x_search=True の場合、X/Twitter情報の活用を促す
     """
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -173,37 +174,41 @@ def think_with_grok(user_question: str, research_text: str) -> str:
         "Content-Type": "application/json",
     }
     
+    # X検索強化版の場合、特別な指示を追加
+    x_search_instruction = ""
+    if enable_x_search:
+        x_search_instruction = (
+            "\n\n**重要**: あなたはGrokとしてX（Twitter）の情報にアクセスできます。\n"
+            "上記の調査メモに加えて、X上の最新のトレンド・議論・反応を考慮し、\n"
+            "それらを含めた独立した回答案を作成してください。\n\n"
+            "注意: X上の情報が確認できない場合は、その旨を正直に述べてください。\n"
+            "架空の投稿や存在しない反応を作成しないこと。"
+        )
+    
     user_content = (
         f"ユーザーの質問:\n{user_question}\n\n"
         f"調査メモ:\n{research_text}\n\n"
         "指示:\n"
         "あなたはGeminiとは別の独立したAIです。\n"
-        "調査メモを参考にしつつ、あなた自身の視点でユーザーの質問に対する回答案を作成してください。\n"
-        "Geminiの意見に同調する必要はありません。独自の洞察や、Geminiが見落としがちな視点を提供してください。\n"
+        "上記の調査メモを参考にしつつも、あなた自身の視点で独立した回答案を作成してください。\n"
+        "Geminiの意見に合わせる必要はありません。"
+        f"{x_search_instruction}"
     )
     
     data = {
-        "model": "x-ai/grok-4.1-fast:free",
-        "reasoning": {"enabled": True},
+        "model": "x-ai/grok-2-1212",
         "messages": [
-            {
-                "role": "system",
-                "content": "あなたは独立した思考を持つAIアシスタントです。",
-            },
-            {
-                "role": "user",
-                "content": user_content,
-            },
+            {"role": "user", "content": user_content}
         ],
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
+        resp = requests.post(url, headers=headers, json=data, timeout=60)
+        resp.raise_for_status()
+        j = resp.json()
+        return j["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"Grok思考エラー: {str(e)}"
+        return f"[Grok思考エラー: {e}]"
 
 def _extract_puter_text(message_content):
     """
@@ -583,9 +588,10 @@ with st.sidebar:
                 response_mode = st.radio(
                     "モード",
                     [
-                        "1. 熟考 + 鬼軍曹",
+                        "1. (試験中)熟考 + 鬼軍曹",
                         "2. 熟考 (メタ思考)",
-                        "3. 熟考 (本気MAX)",
+                        "3. (試験中)熟考 (本気MAX)",
+                        "4. 熟考(メタ思考)+grok検索強化版",
                     ],
                     index=1  # デフォルトをメタ思考に変更
                 )
@@ -1270,6 +1276,7 @@ if prompt:
                 enable_research = "β1" not in response_mode
                 enable_meta = "メタ" in response_mode or "MAX" in response_mode
                 enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
+                enable_grok_x_search = "grok検索強化版" in response_mode
 
                 # =========================
                 # 通常モード (高速 / 鬼軍曹)
@@ -1478,7 +1485,7 @@ if prompt:
                     if enable_meta and OPENROUTER_API_KEY:
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
                         try:
-                            grok_thought = think_with_grok(prompt, research_text)
+                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search)
                             if grok_thought:
                                 grok_status = "success"
                                 status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
