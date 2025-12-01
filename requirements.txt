@@ -6,3 +6,5 @@ Pillow
 st-img-pastebutton
 requests
 curl_cffi
+putergenai
+nest_asyncio
