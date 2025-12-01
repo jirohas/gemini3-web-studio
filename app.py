@@ -567,7 +567,7 @@ with st.sidebar:
     mode_category = st.radio(
         "使用するモード",
         ["🎯 回答モード(多層)", "🎯 回答モード(通常)", "β：🎯 回答モード(多層+puter)"],
-        index=0,  # デフォルトを多層に変更
+        index=2,  # デフォルトをPuterモードに変更
         horizontal=True,
     )
     
