@@ -76,6 +76,8 @@ if not st.session_state.authenticated:
 # =========================
 
 import requests
+import asyncio
+from putergenai import PuterClient
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
@@ -85,6 +87,20 @@ try:
         OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 except:
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+# Puter 認証情報
+PUTER_USERNAME = None
+PUTER_PASSWORD = None
+try:
+    if "PUTER_USERNAME" in st.secrets:
+        PUTER_USERNAME = st.secrets["PUTER_USERNAME"]
+        PUTER_PASSWORD = st.secrets["PUTER_PASSWORD"]
+    else:
+        PUTER_USERNAME = os.getenv("PUTER_USERNAME")
+        PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
+except Exception:
+    PUTER_USERNAME = os.getenv("PUTER_USERNAME")
+    PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
 
 def review_with_grok(user_question: str, gemini_answer: str, research_text: str = None) -> str:
     """
@@ -187,6 +203,62 @@ def think_with_grok(user_question: str, research_text: str) -> str:
         return result["choices"][0]["message"]["content"]
     except Exception as e:
         return f"Grok思考エラー: {str(e)}"
+
+def _extract_puter_text(message_content):
+    """
+    puter.ai.chat の返り値から テキストだけを取り出す
+    """
+    if isinstance(message_content, str):
+        return message_content
+
+    if isinstance(message_content, list):
+        chunks = []
+        for part in message_content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                chunks.append(part.get("text", ""))
+        return "".join(chunks)
+
+    return str(message_content)
+
+
+def call_claude_opus_via_puter(
+    user_question: str,
+    research_text: str | None = None,
+    system_prompt: str | None = None,
+) -> str:
+    """
+    Claude Opus 4.5（puter.com）で推論させる同期関数
+    """
+    if not PUTER_USERNAME or not PUTER_PASSWORD:
+        return "[Claude (puter) 認証情報未設定]"
+
+    async def _run() -> str:
+        async with PuterClient() as client:
+            await client.login(PUTER_USERNAME, PUTER_PASSWORD)
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            user_content = f"ユーザーの質問:\n{user_question}\n\n"
+            if research_text:
+                user_content += f"調査メモ:\n{research_text}\n\n"
+                user_content += "この調査メモの事実を優先して回答してください。\n"
+
+            messages.append({"role": "user", "content": user_content})
+
+            result = await client.ai_chat(
+                messages=messages,
+                options={
+                    "model": "claude-opus-4-5",
+                    "stream": False,
+                },
+            )
+
+            message = result["response"]["result"]["message"]
+            return _extract_puter_text(message.get("content"))
+
+    return asyncio.run(_run())
 
 def create_new_session():
     current_sessions = load_sessions()
@@ -1318,6 +1390,12 @@ if prompt:
                         usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
                         usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
 
+                    # 多層+puterモードの鬼軍曹モードかチェック
+                    is_puter_onigunsou = (
+                        mode_category == "🎯 回答モード(多層+puter)" and
+                        response_mode == "1. 熟考 + 鬼軍曹"
+                    )
+
                     # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
                     grok_thought = ""
                     if enable_meta and OPENROUTER_API_KEY:
@@ -1328,6 +1406,26 @@ if prompt:
                                 st.markdown(grok_thought)
                         except Exception as e:
                             status_container.write(f"⚠ Grok思考エラー: {e}")
+
+                    # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
+                    claude_thought = ""
+                    if is_puter_onigunsou and PUTER_USERNAME and PUTER_PASSWORD:
+                        status_container.write("Phase 1.5c: Claude Opus 4.5 独立思考中...")
+                        try:
+                            claude_thought = call_claude_opus_via_puter(
+                                user_question=prompt,
+                                research_text=research_text,
+                                system_prompt=(
+                                    "あなたは Claude Opus 4.5 です。"
+                                    "Gemini が集めた調査メモを参考にしつつも、"
+                                    "自分の視点で独立した回答案・気づきを出してください。"
+                                    "Gemini の意見に合わせる必要はありません。"
+                                ),
+                            )
+                            with status_container.expander("Claude Opus 4.5 の独立回答案", expanded=False):
+                                st.markdown(claude_thought)
+                        except Exception as e:
+                            status_container.write(f"⚠ Claude思考エラー: {e}")
 
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
@@ -1390,7 +1488,16 @@ if prompt:
                     
                     if enable_meta and grok_thought:
                         synthesis_prompt_text += f"==== 別視点からの回答案 (Grok) ====\n{grok_thought}\n==== 別視点ここまで ====\n\n"
-                        synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. Grokの回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    
+                    if is_puter_onigunsou and claude_thought:
+                        synthesis_prompt_text += f"==== 別視点からの回答案 (Claude Opus 4.5 via Puter) ====\n{claude_thought}\n==== Claude別視点ここまで ====\n\n"
+                    
+                    # 統合指示
+                    if enable_meta and (grok_thought or claude_thought):
+                        synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. Grok"
+                        if is_puter_onigunsou and claude_thought:
+                            synthesis_prompt_text += " / Claude"
+                        synthesis_prompt_text += " の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
