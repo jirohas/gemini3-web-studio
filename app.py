@@ -76,13 +76,7 @@ if not st.session_state.authenticated:
 # =========================
 
 import requests
-from curl_cffi import requests as crequests  # Grok用（必要に応じて残す）
-import asyncio
-import nest_asyncio
-from putergenai import PuterClient
-
-# StreamlitでAsyncを使うための設定
-nest_asyncio.apply()
+from curl_cffi import requests as crequests  # Puter用
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
@@ -237,51 +231,112 @@ def call_claude_opus_via_puter(
     system_prompt: str | None = None,
 ) -> str:
     """
-    Claude Opus 4.5（puter.com）via putergenai SDK
-    公式ライブラリを使用してClaudeにアクセス
+    Claude Opus 4.5（puter.com）で推論させる同期関数
+    curl_cffiでChrome 124を偽装して直接APIを叩く
     """
     if not PUTER_USERNAME or not PUTER_PASSWORD:
         return "[Claude (puter) 認証情報未設定]"
 
-    async def _run() -> str:
+    # 1. Prepare Headers (Chrome 124 Masquerading)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9,ja;q=0.8",
+        "Origin": "https://puter.com",
+        "Referer": "https://puter.com/",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        "Content-Type": "application/json"
+    }
+
+    token = st.session_state.get("puter_token")
+
+    # トークンがない、または再試行が必要な場合のログイン関数
+    def perform_login():
         try:
-            async with PuterClient() as client:
-                # SDKでログイン
-                await client.login(PUTER_USERNAME, PUTER_PASSWORD)
-
-                # メッセージ構築
-                messages = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
-
-                user_content = f"ユーザーの質問:\n{user_question}\n\n"
-                if research_text:
-                    user_content += f"調査メモ:\n{research_text}\n\n"
-                    user_content += "この調査メモの事実を優先して回答してください。\n"
-
-                messages.append({"role": "user", "content": user_content})
-
-                # Claude Opus 4.5 を呼び出し
-                result = await client.ai_chat(
-                    messages=messages,
-                    options={
-                        "model": "claude-opus-4-5",  # ハイフン区切り
-                        "stream": False,
-                    },
-                )
-
-                # レスポンスから本文を取得
-                message_content = result["response"]["result"]["message"]["content"]
-                return _extract_puter_text(message_content)
-
+            resp = crequests.post(
+                "https://api.puter.com/login",
+                json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD},
+                headers=headers,
+                timeout=30,
+                impersonate="chrome124"
+            )
+            if resp.status_code != 200:
+                return None, f"[Claude Login Error] Status: {resp.status_code}"
+            
+            new_token = resp.json().get("token")
+            if not new_token:
+                return None, "[Claude Login Error] Token not found"
+            
+            return new_token, None
         except Exception as e:
-            return f"[Claude SDK Error] {str(e)}"
+            return None, f"[Claude Login Error] {str(e)}"
 
-    # Streamlitの同期コンテキストでasyncを実行
+    # トークンがない場合はログイン
+    if not token:
+        token, error = perform_login()
+        if error:
+            return error
+        st.session_state.puter_token = token
+
+    # 2. Chat
+    chat_url = "https://api.puter.com/drivers/call"
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    user_content = f"ユーザーの質問:\n{user_question}\n\n"
+    if research_text:
+        user_content += f"調査メモ:\n{research_text}\n\n"
+        user_content += "この調査メモの事実を優先して回答してください。\n"
+
+    messages.append({"role": "user", "content": user_content})
+    
+    payload = {
+        "interface": "puter-chat-completion",
+        "driver": "claude",
+        "method": "complete",
+        "args": {
+            "messages": messages,
+            "model": "claude-opus-4-5",
+            "stream": False
+        }
+    }
+
     try:
-        return asyncio.run(_run())
+        # 初回トライ
+        auth_headers = headers.copy()
+        auth_headers["Authorization"] = f"Bearer {token}"
+        chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome124")
+
+        # 401/403の場合は再ログイン
+        if chat_resp.status_code in [401, 403]:
+            token, error = perform_login()
+            if error:
+                return error
+            st.session_state.puter_token = token
+            
+            # リトライ
+            auth_headers["Authorization"] = f"Bearer {token}"
+            chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome124")
+
+        if chat_resp.status_code != 200:
+            return f"[Claude API Error] Status: {chat_resp.status_code}"
+            
+        result = chat_resp.json()
+        if not result.get("success", False):
+             return f"[Claude API Error] {result.get('error', 'Unknown error')}"
+
+        message = result["result"]["message"]
+        return _extract_puter_text(message.get("content"))
+
     except Exception as e:
-        return f"[Claude Connection Error] {str(e)}"
+        return f"[Claude Error] {str(e)}"
 
 def create_new_session():
     current_sessions = load_sessions()
