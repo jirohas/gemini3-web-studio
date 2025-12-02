@@ -652,11 +652,11 @@ with st.sidebar:
                 response_mode = st.radio(
                     "モード",
                     [
-                        "(試験中grok)熟考 + 鬼軍曹",
-                        "(試験中grok)熟考 (本気MAX)",
+                        "熟考 + 鬼軍曹",
+                        "熟考 (本気MAX)",
                         "熟考(メタ思考)+grok検索強化版",
                     ],
-                    index=2  # デフォルト: grok検索強化版
+                    index=1  # デフォルト: 本気MAX
                 )
             else:  # その他
                 response_mode = st.radio(
