@@ -340,7 +340,7 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
             additionalModelRequestFields={
                 "thinking": {
                     "type": "enabled",
-                    "budget": 3000  # 思考用トークン数
+                    "budget_tokens": 3000  # 思考用トークン数
                 }
             }
         )
