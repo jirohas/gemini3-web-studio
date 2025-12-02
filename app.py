@@ -101,25 +101,31 @@ except Exception:
     PUTER_USERNAME = os.getenv("PUTER_USERNAME")
     PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
 
-# ▼▼▼ OpenAI SDK (GitHub Models用) ▼▼▼
+
+# ▼▼▼ AWS Bedrock (Claude 4.5 Sonnet用) ▼▼▼
 try:
-    from openai import OpenAI
-    HAS_OPENAI = True
+    import boto3
+    HAS_BOTO3 = True
 except ImportError:
-    HAS_OPENAI = False
+    HAS_BOTO3 = False
 
-# GitHub Token取得 (GitHub Models用)
+# AWS認証情報取得
 try:
-    if "GITHUB_TOKEN" in st.secrets:
-        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+    if "AWS_ACCESS_KEY_ID" in st.secrets:
+        AWS_ACCESS_KEY_ID = st.secrets["AWS_ACCESS_KEY_ID"]
+        AWS_SECRET_ACCESS_KEY = st.secrets["AWS_SECRET_ACCESS_KEY"]
     else:
-        GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+        AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+        AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 except:
-    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
-# モデルID定数
-GITHUB_MODEL_ID = "o4-mini"
+# Claude 4.5 SonnetのモデルID
+CLAUDE_MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+CLAUDE_REGION = "us-east-1"
 # ▲▲▲ 追加ここまで ▲▲▲
+
 
 # =========================
 # Session Management
@@ -281,16 +287,16 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         return f"Error calling Grok: {e}"
 
 
-def think_with_o4_mini(user_question: str, research_text: str) -> str:
+def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
     """
-    GitHub Models (無料枠) の o4-mini を使って独立した回答案を作成する
+    AWS Bedrock 経由で Claude 4.5 Sonnet を使って独立した回答案を作成する
     """
-    if not HAS_OPENAI:
-        return "Error: openai library not installed. (pip install openai)"
-    if not GITHUB_TOKEN:
-        return "Error: GITHUB_TOKEN is missing."
+    if not HAS_BOTO3:
+        return "Error: boto3 library not installed. (pip install boto3)"
+    if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+        return "Error: AWS credentials are missing."
 
-    # o4-mini への役割付与: 論理的推論とリスク指摘に特化
+    # Claude 4.5 への役割付与: 論理的推論とリスク指摘に特化
     system_prompt = (
         "あなたはGeminiとは異なる独立したAIアドバイザーです。\n"
         "提供された調査メモを事実のベースとしつつも、あなたの強みである「論理的推論(Reasoning)」を活かして、\n"
@@ -306,26 +312,40 @@ def think_with_o4_mini(user_question: str, research_text: str) -> str:
     )
 
     try:
-        # GitHub Models エンドポイント設定 (Azure AI Inference)
-        client = OpenAI(
-            base_url="https://models.inference.ai.azure.com",
-            api_key=GITHUB_TOKEN,
+        import json
+        
+        # AWS Bedrock クライアント作成
+        bedrock = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=CLAUDE_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
         )
 
-        response = client.chat.completions.create(
-            model=GITHUB_MODEL_ID,  # 定数化したIDを使用
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+        # Claude 3.5形式のリクエスト
+        body = json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 2000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"{system_prompt}\n\n{user_content}"
+                }
             ],
-            temperature=0.7,
-            max_tokens=1500, # 無料枠節約のため少し控えめに
+            "temperature": 0.7
+        })
+
+        response = bedrock.invoke_model(
+            modelId=CLAUDE_MODEL_ID,
+            body=body
         )
-        return response.choices[0].message.content
+
+        response_body = json.loads(response['body'].read())
+        return response_body['content'][0]['text']
 
     except Exception as e:
-        # レート制限(429)などのエラー詳細を返す
-        return f"Error calling {GITHUB_MODEL_ID}: {e}"
+        # エラー詳細を返す
+        return f"Error calling Claude 4.5 Sonnet (Bedrock): {e}"
 
 
 def _extract_puter_text(message_content):
@@ -1684,34 +1704,34 @@ if prompt:
                             status_container.write(f"⚠ Claude思考エラー: {e}")
                             claude_thought = ""
 
-                    # ▼▼▼ Phase 1.5d: GitHub Models (o4-mini) 独立思考 ▼▼▼
-                    o4_thought = ""
-                    o4_status = "skipped"
+                    # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
+                    claude45_thought = ""
+                    claude45_status = "skipped"
 
-                    # 発動条件: mz/Az または MAX モード && GitHubトークン設定済み
-                    use_o4 = (("Az" in mode_type or "MAX" in response_mode) and GITHUB_TOKEN)
+                    # 発動条件: mz/Az または MAX モード && AWS認証情報設定済み
+                    use_claude45 = (("Az" in mode_type or "MAX" in response_mode) and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
 
-                    if use_o4:
-                        status_container.write(f"Phase 1.5d: {GITHUB_MODEL_ID} (GitHub Models) 独立思考中...")
+                    if use_claude45:
+                        status_container.write(f"Phase 1.5d: Claude 4.5 Sonnet (AWS Bedrock) 独立思考中...")
                         try:
-                            # 調査メモが長すぎる場合のエラー回避（20000文字に切り詰め）
-                            safe_research_text = research_text[:20000] if len(research_text) > 20000 else research_text
+                            # 調査メモが長すぎる場合のエラー回避（40000文字に切り詰め）
+                            safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
 
-                            o4_thought = think_with_o4_mini(prompt, safe_research_text)
+                            claude45_thought = think_with_claude45_bedrock(prompt, safe_research_text)
 
-                            if o4_thought and not o4_thought.startswith("Error"):
-                                o4_status = "success"
-                                status_container.write(f"✓ {GITHUB_MODEL_ID} 独立思考完了")
-                                with status_container.expander(f"{GITHUB_MODEL_ID} の独立回答案", expanded=False):
-                                    st.markdown(o4_thought)
+                            if claude45_thought and not claude45_thought.startswith("Error"):
+                                claude45_status = "success"
+                                status_container.write(f"✓ Claude 4.5 Sonnet 独立思考完了")
+                                with status_container.expander(f"Claude 4.5 Sonnet の独立回答案", expanded=False):
+                                    st.markdown(claude45_thought)
                             else:
-                                o4_status = "error"
+                                claude45_status = "error"
                                 # エラー内容はExpanderの中に隠してUXを損なわないようにする
-                                with status_container.expander(f"⚠ {GITHUB_MODEL_ID} エラー詳細", expanded=False):
-                                    st.code(o4_thought)
+                                with status_container.expander(f"⚠ Claude 4.5 Sonnet エラー詳細", expanded=False):
+                                    st.code(claude45_thought)
                         except Exception as e:
-                            o4_status = "error"
-                            status_container.write(f"⚠ {GITHUB_MODEL_ID} 処理エラー: {e}")
+                            claude45_status = "error"
+                            status_container.write(f"⚠ Claude 4.5 Sonnet 処理エラー: {e}")
                     # ▲▲▲ Phase 1.5d ここまで ▲▲▲
 
                     # --- Phase 2: 統合エージェント ---
@@ -1779,14 +1799,15 @@ if prompt:
                     if is_puter_onigunsou and claude_thought:
                         synthesis_prompt_text += f"==== 別視点からの回答案 (Claude Opus 4.5 via Puter) ====\n{claude_thought}\n==== Claude別視点ここまで ====\n\n"
                     
-                    # ▼▼▼ o4-mini の回答を統合プロンプトに加える ▼▼▼
-                    if o4_thought and o4_status == "success":
-                        synthesis_prompt_text += f"==== 別視点からの回答案 ({GITHUB_MODEL_ID} / GitHub Models) ====\n{o4_thought}\n==== {GITHUB_MODEL_ID} ここまで ====\n\n"
-                    # ▲▲▲ o4-mini 追加ここまで ▲▲▲
+                    
+                    # ▼▼▼ Claude 4.5 の回答を統合プロンプトに加える ▼▼▼
+                    if claude45_thought and claude45_status == "success":
+                        synthesis_prompt_text += f"==== 別視点からの回答案 (Claude 4.5 Sonnet / AWS Bedrock) ====\n{claude45_thought}\n==== Claude 4.5 Sonnet ここまで ====\n\n"
+                    # ▲▲▲ Claude 4.5 追加ここまで ▲▲▲
                     
                     # 統合指示の修正
-                    if enable_meta and (grok_thought or claude_thought or o4_thought):
-                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude, {GITHUB_MODEL_ID}) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    if enable_meta and (grok_thought or claude_thought or claude45_thought):
+                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude Opus 4.5, Claude 4.5 Sonnet) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
@@ -2010,12 +2031,13 @@ if prompt:
                     elif claude_status == "error":
                         models_used.append("Claude: Opus 4.5 (via Puter) (Error)")
                 
-                # ▼▼▼ o4-mini Status ▼▼▼
-                if o4_status == "success":
-                    models_used.append(f"{GITHUB_MODEL_ID} (GitHub/Free) (OK)")
-                elif o4_status == "error":
-                    models_used.append(f"{GITHUB_MODEL_ID} (Error)")
-                # ▲▲▲ o4-mini Status ここまで ▲▲▲
+                
+                # ▼▼▼ Claude 4.5 Sonnet Status ▼▼▼
+                if claude45_status == "success":
+                    models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (OK)")
+                elif claude45_status == "error":
+                    models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (Error)")
+                # ▲▲▲ Claude 4.5 Sonnet Status ここまで ▲▲▲
                 
                 
                 st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
@@ -2037,10 +2059,11 @@ if prompt:
                 elif claude_status == "error":
                     processing_history.append("**Phase 1.5c**: Claude Opus 4.5 独立思考 ⚠️ エラー")
                 
-                if o4_status == "success":
-                    processing_history.append(f"**Phase 1.5d**: {GITHUB_MODEL_ID} 独立思考 (GitHub Models) ✓")
-                elif o4_status == "error":
-                    processing_history.append(f"**Phase 1.5d**: {GITHUB_MODEL_ID} 独立思考 ⚠️ エラー")
+                
+                if claude45_status == "success":
+                    processing_history.append(f"**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
+                elif claude45_status == "error":
+                    processing_history.append(f"**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 ⚠️ エラー")
                 
                 processing_history.append("**Phase 2**: Gemini 統合フェーズ")
                 
