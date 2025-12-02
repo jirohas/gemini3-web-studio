@@ -2136,6 +2136,34 @@ if prompt:
                 )
                 
                 st.markdown(final_answer_with_history)
+                
+                # ▼▼▼ コストサマリー表示 ▼▼▼
+                st.markdown("---")
+                st.markdown("## 💰 コストサマリー")
+                
+                # Claude 4.5 Sonnet のコスト
+                claude_cost = 0.0
+                if claude45_usage:
+                    input_tokens = claude45_usage.get("inputTokens", 0)
+                    output_tokens = claude45_usage.get("outputTokens", 0)
+                    claude_cost = (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
+                    st.markdown(f"**Claude 4.5 Sonnet (AWS Bedrock)**")
+                    st.markdown(f"- Input: {input_tokens:,} tokens")
+                    st.markdown(f"- Output: {output_tokens:,} tokens")
+                    st.markdown(f"- コスト: ${claude_cost:.4f}")
+                    st.markdown("")
+                
+                # Gemini のコスト (total_session_cost - claude_cost)
+                gemini_cost = st.session_state.session_cost - claude_cost
+                if gemini_cost > 0:
+                    st.markdown(f"**Gemini (gemini-3-pro-preview)**")
+                    st.markdown(f"- コスト: ${gemini_cost:.4f}")
+                    st.markdown("")
+                
+                # 合計
+                total_cost = st.session_state.session_cost
+                st.markdown(f"**合計セッションコスト**: ${total_cost:.4f}")
+                    
                 # ▲▲▲ 処理履歴追加ここまで ▲▲▲
 
                 # ---- グラウンディング情報 ----
