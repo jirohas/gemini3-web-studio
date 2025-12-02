@@ -632,20 +632,20 @@ with st.sidebar:
         with st.expander("モード設定(多層)", expanded=True):
             mode_type = st.radio(
                 "タイプ",
-                ["grok強化+OpenAI強化", "grok通常モード", "grok強化モード", "その他"],
+                ["ms/Az", "grok通常モード", "grok強化モード", "その他"],
                 index=2,  # デフォルトをgrok強化モードに
                 horizontal=True,
                 label_visibility="collapsed"
             )
             
-            if mode_type == "grok強化+OpenAI強化":
+            if mode_type == "ms/Az":
                 response_mode = st.radio(
                     "モード",
                     [
-                        "熟考 + 鬼軍曹 [+OpenAI]",
-                        "熟考 (本気MAX) [+OpenAI]",
-                        "熟考 (本気MAX)ms/Az [+OpenAI]",
-                        "熟考(メタ思考)+grok検索強化版 [+OpenAI]",
+                        "熟考 + 鬼軍曹",
+                        "熟考 (本気MAX)",
+                        "熟考 (本気MAX)ms/Az",
+                        "熟考(メタ思考)+grok検索強化版",
                     ],
                     index=1  # デフォルト: 本気MAX
                 )
