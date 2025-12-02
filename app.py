@@ -859,7 +859,7 @@ with st.sidebar:
                         "熟考 (本気MAX)ms/Az",
                         "熟考(メタ思考)+grok検索強化版",
                     ],
-                    index=1  # デフォルト: 本気MAX
+                    index=2  # デフォルト: ms/Az (o4-mini付き)
                 )
             elif mode_type == "grok通常モード":
                 response_mode = st.radio(
