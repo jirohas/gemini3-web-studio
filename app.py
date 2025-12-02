@@ -2017,8 +2017,48 @@ if prompt:
                     models_used.append(f"{GITHUB_MODEL_ID} (Error)")
                 # ▲▲▲ o4-mini Status ここまで ▲▲▲
                 
+                
                 st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
-                st.markdown(final_answer)
+                
+                # ▼▼▼ 処理履歴を最終回答の冒頭に追加 ▼▼▼
+                processing_history = []
+                processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
+                
+                if enable_meta:
+                    processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
+                
+                if grok_status == "success":
+                    processing_history.append("**Phase 1.5b**: Grok 独立思考 ✓")
+                elif grok_status == "error":
+                    processing_history.append("**Phase 1.5b**: Grok 独立思考 ⚠️ エラー")
+                
+                if claude_status == "success":
+                    processing_history.append("**Phase 1.5c**: Claude Opus 4.5 独立思考 (via Puter) ✓")
+                elif claude_status == "error":
+                    processing_history.append("**Phase 1.5c**: Claude Opus 4.5 独立思考 ⚠️ エラー")
+                
+                if o4_status == "success":
+                    processing_history.append(f"**Phase 1.5d**: {GITHUB_MODEL_ID} 独立思考 (GitHub Models) ✓")
+                elif o4_status == "error":
+                    processing_history.append(f"**Phase 1.5d**: {GITHUB_MODEL_ID} 独立思考 ⚠️ エラー")
+                
+                processing_history.append("**Phase 2**: Gemini 統合フェーズ")
+                
+                if enable_strict:
+                    processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
+                    if use_grok_reviewer:
+                        processing_history.append("**Phase 3b**: Grok 最終レビュー")
+                
+                # 処理履歴を最終回答に追加
+                final_answer_with_history = (
+                    "## 📊 処理履歴\n\n"
+                    + "\n".join([f"- {item}" for item in processing_history])
+                    + "\n\n---\n\n"
+                    + final_answer
+                )
+                
+                st.markdown(final_answer_with_history)
+                # ▲▲▲ 処理履歴追加ここまで ▲▲▲
 
                 # ---- グラウンディング情報 ----
                 if grounding_metadata:
