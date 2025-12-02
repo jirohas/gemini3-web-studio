@@ -32,8 +32,18 @@ load_dotenv()
 
 st.set_page_config(page_title="Gemini 3 Web Studio", layout="wide")
 
-# 🔐 パスワードロック (***REMOVED***) + URLトークン永続化
-SECRET_TOKEN = "access_granted_***REMOVED***"
+# 🔐 パスワードロック + URLトークン永続化
+# パスワードとトークンを環境変数から取得
+try:
+    if "APP_PASSWORD" in st.secrets:
+        APP_PASSWORD = st.secrets["APP_PASSWORD"]
+        SECRET_TOKEN = st.secrets.get("SECRET_TOKEN", "access_granted_default")
+    else:
+        APP_PASSWORD = os.getenv("APP_PASSWORD", "***REMOVED***")  # フォールバック（開発用）
+        SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_***REMOVED***")
+except:
+    APP_PASSWORD = os.getenv("APP_PASSWORD", "***REMOVED***")
+    SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_***REMOVED***")
 
 # 1. URLトークンチェック
 query_params = st.query_params
@@ -52,7 +62,7 @@ if not st.session_state.authenticated:
     password = st.text_input("パスワード", type="password")
 
     if st.button("ログイン"):
-        if password == "***REMOVED***":
+        if password == APP_PASSWORD:
             st.session_state.authenticated = True
             # URLにトークンを付与してリロード（これでブックマーク可能になる）
             st.query_params["auth"] = SECRET_TOKEN
