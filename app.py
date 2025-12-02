@@ -321,7 +321,7 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY
         )
 
-        # Bedrock converse API を使用（inference profile対応）
+        # Bedrock converse API を使用（inference profile対応 + Extended Thinking）
         resp = bedrock.converse(
             modelId=CLAUDE_MODEL_ID,
             messages=[
@@ -333,17 +333,30 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
                 }
             ],
             inferenceConfig={
-                "maxTokens": 2000,
+                "maxTokens": 5000,  # Thinking modeでは多めに確保
                 "temperature": 0.7,
             },
+            # Extended Thinking Mode を有効化
+            additionalModelRequestFields={
+                "thinking": {
+                    "type": "enabled",
+                    "budget": 3000  # 思考用トークン数
+                }
+            }
         )
 
-        # 出力テキストの取り出し
+        # 思考ブロックと回答テキストの取り出し
+        thinking_blocks = []
         text_chunks = []
         output = resp.get("output", {})
         message = output.get("message", {})
+        
         for part in message.get("content", []):
-            if "text" in part:
+            # Thinking block（思考プロセス）
+            if "thinking" in part:
+                thinking_blocks.append(part["thinking"])
+            # 通常のテキスト（回答）
+            elif "text" in part:
                 text_chunks.append(part["text"])
 
         # 使用量情報の取得
@@ -354,6 +367,12 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
         }
 
         result_text = "".join(text_chunks) if text_chunks else "[Claude 4.5 Sonnetからのテキストが空でした]"
+        
+        # 思考ブロックがある場合は冒頭に追加
+        if thinking_blocks:
+            thinking_text = "\n\n".join([f"**🧠 思考プロセス {i+1}:**\n{block}" for i, block in enumerate(thinking_blocks)])
+            result_text = f"{thinking_text}\n\n---\n\n**💡 最終回答:**\n{result_text}"
+        
         return (result_text, usage_dict)
 
     except Exception as e:
