@@ -101,6 +101,26 @@ except Exception:
     PUTER_USERNAME = os.getenv("PUTER_USERNAME")
     PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
 
+# ▼▼▼ OpenAI SDK (GitHub Models用) ▼▼▼
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+
+# GitHub Token取得 (GitHub Models用)
+try:
+    if "GITHUB_TOKEN" in st.secrets:
+        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+    else:
+        GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+except:
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+# モデルID定数
+GITHUB_MODEL_ID = "o4-mini"
+# ▲▲▲ 追加ここまで ▲▲▲
+
 # =========================
 # Session Management
 # =========================
@@ -259,6 +279,54 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         return result["choices"][0]["message"]["content"]
     except Exception as e:
         return f"Error calling Grok: {e}"
+
+
+def think_with_o4_mini(user_question: str, research_text: str) -> str:
+    """
+    GitHub Models (無料枠) の o4-mini を使って独立した回答案を作成する
+    """
+    if not HAS_OPENAI:
+        return "Error: openai library not installed. (pip install openai)"
+    if not GITHUB_TOKEN:
+        return "Error: GITHUB_TOKEN is missing."
+
+    # o4-mini への役割付与: 論理的推論とリスク指摘に特化
+    system_prompt = (
+        "あなたはGeminiとは異なる独立したAIアドバイザーです。\n"
+        "提供された調査メモを事実のベースとしつつも、あなたの強みである「論理的推論(Reasoning)」を活かして、\n"
+        "Geminiが見落としがちな『前提の誤り』『隠れたリスク』『別の可能性』を指摘してください。\n"
+        "回答は簡潔に、箇条書きで出力してください。"
+    )
+
+    user_content = (
+        f"ユーザーの質問:\n{user_question}\n\n"
+        f"調査メモ:\n{research_text}\n\n"
+        "指示:\n"
+        "調査メモを元に、あなた自身の視点で回答案を作成してください。"
+    )
+
+    try:
+        # GitHub Models エンドポイント設定 (Azure AI Inference)
+        client = OpenAI(
+            base_url="https://models.inference.ai.azure.com",
+            api_key=GITHUB_TOKEN,
+        )
+
+        response = client.chat.completions.create(
+            model=GITHUB_MODEL_ID,  # 定数化したIDを使用
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            temperature=0.7,
+            max_tokens=1500, # 無料枠節約のため少し控えめに
+        )
+        return response.choices[0].message.content
+
+    except Exception as e:
+        # レート制限(429)などのエラー詳細を返す
+        return f"Error calling {GITHUB_MODEL_ID}: {e}"
+
 
 def _extract_puter_text(message_content):
     """
@@ -1616,6 +1684,36 @@ if prompt:
                             status_container.write(f"⚠ Claude思考エラー: {e}")
                             claude_thought = ""
 
+                    # ▼▼▼ Phase 1.5d: GitHub Models (o4-mini) 独立思考 ▼▼▼
+                    o4_thought = ""
+                    o4_status = "skipped"
+
+                    # 発動条件: mz/Az または MAX モード && GitHubトークン設定済み
+                    use_o4 = (("Az" in mode_type or "MAX" in response_mode) and GITHUB_TOKEN)
+
+                    if use_o4:
+                        status_container.write(f"Phase 1.5d: {GITHUB_MODEL_ID} (GitHub Models) 独立思考中...")
+                        try:
+                            # 調査メモが長すぎる場合のエラー回避（20000文字に切り詰め）
+                            safe_research_text = research_text[:20000] if len(research_text) > 20000 else research_text
+
+                            o4_thought = think_with_o4_mini(prompt, safe_research_text)
+
+                            if o4_thought and not o4_thought.startswith("Error"):
+                                o4_status = "success"
+                                status_container.write(f"✓ {GITHUB_MODEL_ID} 独立思考完了")
+                                with status_container.expander(f"{GITHUB_MODEL_ID} の独立回答案", expanded=False):
+                                    st.markdown(o4_thought)
+                            else:
+                                o4_status = "error"
+                                # エラー内容はExpanderの中に隠してUXを損なわないようにする
+                                with status_container.expander(f"⚠ {GITHUB_MODEL_ID} エラー詳細", expanded=False):
+                                    st.code(o4_thought)
+                        except Exception as e:
+                            o4_status = "error"
+                            status_container.write(f"⚠ {GITHUB_MODEL_ID} 処理エラー: {e}")
+                    # ▲▲▲ Phase 1.5d ここまで ▲▲▲
+
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
                     
@@ -1681,12 +1779,14 @@ if prompt:
                     if is_puter_onigunsou and claude_thought:
                         synthesis_prompt_text += f"==== 別視点からの回答案 (Claude Opus 4.5 via Puter) ====\n{claude_thought}\n==== Claude別視点ここまで ====\n\n"
                     
-                    # 統合指示
-                    if enable_meta and (grok_thought or claude_thought):
-                        synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. Grok"
-                        if is_puter_onigunsou and claude_thought:
-                            synthesis_prompt_text += " / Claude"
-                        synthesis_prompt_text += " の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    # ▼▼▼ o4-mini の回答を統合プロンプトに加える ▼▼▼
+                    if o4_thought and o4_status == "success":
+                        synthesis_prompt_text += f"==== 別視点からの回答案 ({GITHUB_MODEL_ID} / GitHub Models) ====\n{o4_thought}\n==== {GITHUB_MODEL_ID} ここまで ====\n\n"
+                    # ▲▲▲ o4-mini 追加ここまで ▲▲▲
+                    
+                    # 統合指示の修正
+                    if enable_meta and (grok_thought or claude_thought or o4_thought):
+                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude, {GITHUB_MODEL_ID}) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
@@ -1909,6 +2009,13 @@ if prompt:
                         models_used.append("Claude: Opus 4.5 (via Puter) (OK)")
                     elif claude_status == "error":
                         models_used.append("Claude: Opus 4.5 (via Puter) (Error)")
+                
+                # ▼▼▼ o4-mini Status ▼▼▼
+                if o4_status == "success":
+                    models_used.append(f"{GITHUB_MODEL_ID} (GitHub/Free) (OK)")
+                elif o4_status == "error":
+                    models_used.append(f"{GITHUB_MODEL_ID} (Error)")
+                # ▲▲▲ o4-mini Status ここまで ▲▲▲
                 
                 st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
                 st.markdown(final_answer)
