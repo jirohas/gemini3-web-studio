@@ -576,35 +576,37 @@ with st.sidebar:
         with st.expander("モード設定(多層)", expanded=True):
             mode_type = st.radio(
                 "タイプ",
-                ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
-                index=0,
+                ["grok通常モード", "grok強化モード", "その他"],
+                index=1,  # デフォルトをgrok強化モードに
                 horizontal=True,
                 label_visibility="collapsed"
             )
             
-            if mode_type == "選択1 (完全版)":
+            if mode_type == "grok通常モード":
                 response_mode = st.radio(
                     "モード",
                     [
-                        "1. (試験中)熟考 + 鬼軍曹",
-                        "2. 熟考 (メタ思考)",
-                        "3. (試験中)熟考 (本気MAX)",
-                        "4. 熟考(メタ思考)+grok検索強化版",
+                        "(試験中)熟考 + 鬼軍曹",
+                        "熟考 (メタ思考)",
+                        "(試験中)熟考 (本気MAX)",
                     ],
-                    index=3  # デフォルトをgrok検索強化版に変更
+                    index=1  # デフォルト: メタ思考
                 )
-            elif mode_type == "選択2 (不完全版)":
+            elif mode_type == "grok強化モード":
+                response_mode = st.radio(
+                    "モード",
+                    [
+                        "(試験中grok)熟考 + 鬼軍曹",
+                        "(試験中grok)熟考 (本気MAX)",
+                        "熟考(メタ思考)+grok検索強化版",
+                    ],
+                    index=2  # デフォルト: grok検索強化版
+                )
+            else:  # その他
                 response_mode = st.radio(
                     "モード",
                     [
                         "1. 熟考 (リサーチ)",
-                    ],
-                    index=0
-                )
-            else:
-                response_mode = st.radio(
-                    "モード",
-                    [
                         "β1. 通常 (高速)",
                     ],
                     index=0
@@ -1274,7 +1276,7 @@ if prompt:
                 enable_research = "β1" not in response_mode
                 enable_meta = "メタ" in response_mode or "MAX" in response_mode
                 enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
-                enable_grok_x_search = "grok検索強化版" in response_mode
+                enable_grok_x_search = "grok" in response_mode
 
                 # =========================
                 # 通常モード (高速 / 鬼軍曹)
