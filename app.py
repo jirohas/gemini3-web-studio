@@ -121,8 +121,8 @@ except:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
-# Claude 4.5 Sonnet の inference profile ID
-CLAUDE_MODEL_ID = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+# Claude 4.5 Sonnet の modelId
+CLAUDE_MODEL_ID = "anthropic.claude-sonnet-4-5-20250929-v1:0"
 CLAUDE_REGION = "us-east-1"
 # ▲▲▲ 追加ここまで ▲▲▲
 
@@ -289,7 +289,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
 
 def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
     """
-    AWS Bedrock 経由で Claude 4.5 Sonnet を使って独立した回答案を作成する
+    AWS Bedrock 経由で Claude Sonnet 4.5 を使って独立した回答案を作成する
     """
     if not HAS_BOTO3:
         return "Error: boto3 library not installed. (pip install boto3)"
@@ -312,8 +312,6 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
     )
 
     try:
-        import json
-        
         # AWS Bedrock クライアント作成
         bedrock = boto3.client(
             service_name='bedrock-runtime',
@@ -322,26 +320,32 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY
         )
 
-        # Claude 3.5形式のリクエスト
-        body = json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2000,
-            "messages": [
+        # Bedrock converse API を使用（inference profile対応）
+        resp = bedrock.converse(
+            modelId=CLAUDE_MODEL_ID,
+            messages=[
                 {
                     "role": "user",
-                    "content": f"{system_prompt}\n\n{user_content}"
+                    "content": [
+                        {"text": f"{system_prompt}\n\n{user_content}"}
+                    ],
                 }
             ],
-            "temperature": 0.7
-        })
-
-        response = bedrock.invoke_model(
-            modelId=CLAUDE_MODEL_ID,
-            body=body
+            inferenceConfig={
+                "maxTokens": 2000,
+                "temperature": 0.7,
+            },
         )
 
-        response_body = json.loads(response['body'].read())
-        return response_body['content'][0]['text']
+        # 出力テキストの取り出し
+        text_chunks = []
+        output = resp.get("output", {})
+        message = output.get("message", {})
+        for part in message.get("content", []):
+            if "text" in part:
+                text_chunks.append(part["text"])
+
+        return "".join(text_chunks) if text_chunks else "[Claude 4.5 Sonnetからのテキストが空でした]"
 
     except Exception as e:
         # エラー詳細を返す
