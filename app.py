@@ -101,60 +101,6 @@ except Exception:
     PUTER_USERNAME = os.getenv("PUTER_USERNAME")
     PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
 
-def review_with_grok(user_question: str, gemini_answer: str, research_text: str = None) -> str:
-    """
-    Grok 4.1 Fast Free を使って、Geminiの回答を最終レビューする
-    research_text: Geminiが収集した調査メモ（最新情報を含む）
-    """
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    
-    # プロンプトの構築
-    user_content = f"ユーザーの質問:\n{user_question}\n\n"
-    
-    if research_text:
-        user_content += f"Gemini の調査メモ（最新情報）:\n{research_text}\n\n"
-    
-    user_content += (
-        f"Gemini の最終回答:\n{gemini_answer}\n\n"
-        "**重要**: 調査メモに含まれる事実の方を、あなた自身の知識よりも優先してください。\n"
-        "最新の情報が調査メモにある場合、それを信頼してください。\n\n"
-        "1. **重大な事実誤認・論理飛躍の指摘**（なければ『特になし』）\n"
-        "2. **具体的な修正提案のリスト**（『修正前』→『修正後』の形式で）\n"
-        "3. **特に不確実性が高いポイント（前提不足、データ不足など）の bullet list**\n"
-    )
-    
-    data = {
-        "model": "x-ai/grok-4.1-fast:free",
-        "reasoning": {"enabled": True},  # Enable multi-step reasoning for deeper review
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "あなたは厳格なレビューアです。"
-                    "事実誤認・論理の飛躍・抜け漏れを容赦なく指摘し、"
-                    "必要なら回答を全文書き直してください。"
-                ),
-            },
-            {
-                "role": "user",
-                "content": user_content.strip() + (
-                    "だけを日本語で出してください。"
-                ),
-            },
-        ],
-    }
-    try:
-        resp = requests.post(url, headers=headers, json=data, timeout=60)
-        resp.raise_for_status()
-        j = resp.json()
-        return j["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"[Grokレビューエラー: {e}]\n\n{gemini_answer}"
-
 # =========================
 # Session Management
 # =========================
@@ -214,7 +160,7 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
     }
     
     data = {
-        "model": "x-ai/grok-2-vision-1212", # 無料枠のモデル
+        "model": "x-ai/grok-beta",  # 最新の無料版モデル
         "messages": [
             {"role": "user", "content": user_content}
         ],
@@ -293,7 +239,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     }
     
     data = {
-        "model": "x-ai/grok-2-vision-1212",
+        "model": "x-ai/grok-beta",  # 最新の無料版モデル
         "messages": [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content}
