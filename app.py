@@ -121,8 +121,8 @@ except:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
-# Claude 4.5 Sonnet の modelId
-CLAUDE_MODEL_ID = "anthropic.claude-sonnet-4-5-20250929-v1:0"
+# Claude 4.5 Sonnet の inference profile ID
+CLAUDE_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 CLAUDE_REGION = "us-east-1"
 # ▲▲▲ 追加ここまで ▲▲▲
 
