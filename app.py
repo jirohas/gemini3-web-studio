@@ -347,7 +347,11 @@ def call_claude_opus_via_puter(
         user_content += f"調査メモ:\n{research_text}\n\n"
         user_content += "この調査メモの事実を優先して回答してください。\n"
 
-    messages.append({"role": "user", "content": user_content})
+    messages.append({
+        "role": "user",
+        "content": user_content,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
     
     payload = {
         "interface": "puter-chat-completion",
@@ -1098,6 +1102,9 @@ client = get_client()
 messages = get_current_messages()
 for idx, msg in enumerate(messages):
     with st.chat_message(msg["role"]):
+        # Display timestamp if available
+        if "timestamp" in msg:
+            st.caption(f"🕒 {msg['timestamp']}")
         st.markdown(msg["content"])
         if msg["role"] == "model":
             col1, col2, col3 = st.columns([0.1, 0.1, 0.8])
@@ -1148,7 +1155,11 @@ if hasattr(st.session_state, "generate_image_trigger") and st.session_state.gene
         st.markdown(f"🎨 画像生成: {img_data['prompt']}")
         st.caption(f"アスペクト比: {img_data['aspect_ratio']}")
 
-    messages.append({"role": "user", "content": f"🎨 画像生成: {img_data['prompt']}"})
+    messages.append({
+        "role": "user",
+        "content": f"🎨 画像生成: {img_data['prompt']}",
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
     update_current_session_messages(messages)
 
     with st.chat_message("assistant"):
@@ -1196,7 +1207,9 @@ if hasattr(st.session_state, "generate_image_trigger") and st.session_state.gene
                         mime="image/png",
                     )
                     messages.append(
-                        {"role": "model", "content": f"✅ 画像を生成しました: {img_data['prompt']}"}
+                        {"role": "model",
+                        "content": f"✅ 画像を生成しました: {img_data['prompt']}",
+                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                     )
                     update_current_session_messages(messages)
                     status.update(label="✅ 画像生成完了", state="complete")
@@ -1229,7 +1242,11 @@ if prompt:
             if pasted_image_bytes:
                 st.caption("📋 画像が貼り付けられました")
 
-        messages.append({"role": "user", "content": prompt})
+        messages.append({
+            "role": "user",
+            "content": prompt,
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
         update_current_session_messages(messages)
 
         # ---- モデル応答 ----
@@ -1907,7 +1924,11 @@ if prompt:
                                 st.markdown(f"{i}. **[{info['title']}]({uri})**")
                                 st.caption(f"   出典: {info['domain']}")
 
-                messages.append({"role": "model", "content": final_answer})
+                messages.append({
+                    "role": "model",
+                    "content": final_answer,
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
                 update_current_session_messages(messages)
 
             except Exception as e:
