@@ -136,6 +136,18 @@ CLAUDE_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 CLAUDE_REGION = "us-east-1"
 # ▲▲▲ 追加ここまで ▲▲▲
 
+# ▼▼▼ GitHub Models (o4-mini用) ▼▼▼
+try:
+    if "GITHUB_TOKEN" in st.secrets:
+        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+    else:
+        GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+except:
+    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+
+GITHUB_MODEL_ID = "o4-mini"
+# ▲▲▲ GitHub Models ここまで ▲▲▲
+
 
 # =========================
 # Session Management
@@ -398,6 +410,66 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
     except Exception as e:
         # エラー詳細を返す
         return (f"Error calling Claude 4.5 Sonnet (Bedrock): {e}", {})
+
+
+
+
+def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dict]:
+    """
+    GitHub Models経由でo4-miniを使って独立した回答案を作成する
+    制限: input 4000トークン以下の場合のみ使用
+    Returns: (回答テキスト, 空dict - GitHub Modelsはusage情報を返さない)
+    """
+    if not GITHUB_TOKEN:
+        return ("Error: GitHub Token is missing.", {})
+    
+    # 入力文字数チェック (4000文字 ≈ 4000トークン)
+    input_text = f"{user_question}\n\n{research_text}"
+    if len(input_text) > 4000:
+        return ("Error: Input too long for o4-mini (limit: 4000 chars)", {})
+    
+    system_prompt = (
+        "あなたはGeminiとは独立したAIアドバイザーです。\n"
+        "提供された調査メモを事実のベースとしつつも、推論能力を活かして、\n"
+        "Geminiが見落としがちな『前提の誤り』『隠れたリスク』『別の可能性』を指摘してください。\n"
+        "回答は簡潔に、箇条書きで出力してください。"
+    )
+    
+    user_content = (
+        f"ユーザーの質問:\n{user_question}\n\n"
+        f"調査メモ:\n{research_text}\n\n"
+        "指示:\n"
+        "調査メモを元に、あなた自身の視点で回答案を作成してください。"
+    )
+    
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    
+    data = {
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+    
+    try:
+        import requests
+        response = requests.post(
+            f"https://models.inference.ai.azure.com/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
+        result = response.json()
+        answer_text = result["choices"][0]["message"]["content"]
+        return (answer_text, {})  # GitHub Modelsはusage情報を返さない
+    except Exception as e:
+        return (f"Error calling o4-mini (GitHub Models): {e}", {})
 
 
 def _extract_puter_text(message_content):
@@ -1799,6 +1871,37 @@ if prompt:
                             status_container.write(f"⚠ Claude 4.5 Sonnet 処理エラー: {e}")
                     # ▲▲▲ Phase 1.5d ここまで ▲▲▲
 
+                    # ▼▼▼ Phase 1.5e: GitHub Models (o4-mini) 独立思考 (ms/Azモードのみ) ▼▼▼
+                    o4mini_thought = ""
+                    o4mini_status = "skipped"
+                    
+                    # 発動条件: ms/Azモード && GitHub Token設定済み && input < 4000文字
+                    use_o4mini = ("ms/Az" in response_mode and GITHUB_TOKEN and len(research_text) <= 4000)
+                    
+                    if use_o4mini:
+                        status_container.write(f"Phase 1.5e: o4-mini (GitHub Models) 独立思考中...")
+                        try:
+                            # 調査メモが長すぎる場合のエラー回避（3500文字に切り詰め、質問分の余裕を確保）
+                            safe_research_text = research_text[:3500] if len(research_text) > 3500 else research_text
+                            
+                            o4mini_thought, _ = think_with_o4_mini(prompt, safe_research_text)
+                            
+                            if o4mini_thought and not o4mini_thought.startswith("Error"):
+                                o4mini_status = "success"
+                                status_container.write(f"✓ o4-mini 独立思考完了")
+                                with status_container.expander(f"o4-mini の独立回答案", expanded=False):
+                                    st.markdown(o4mini_thought)
+                            else:
+                                o4mini_status = "error"
+                                with status_container.expander(f"⚠ o4-mini エラー詳細", expanded=False):
+                                    st.code(o4mini_thought)
+                        except Exception as e:
+                            o4mini_status = "error"
+                            status_container.write(f"⚠ o4-mini 処理エラー: {e}")
+                    elif "ms/Az" in response_mode and len(research_text) > 4000:
+                        status_container.write(f"ℹ️ o4-mini スキップ (入力長: {len(research_text)} > 4000文字)")
+                    # ▲▲▲ Phase 1.5e ここまで ▲▲▲
+
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
                     
@@ -1870,9 +1973,14 @@ if prompt:
                         synthesis_prompt_text += f"==== 別視点からの回答案 (Claude 4.5 Sonnet / AWS Bedrock) ====\n{claude45_thought}\n==== Claude 4.5 Sonnet ここまで ====\n\n"
                     # ▲▲▲ Claude 4.5 追加ここまで ▲▲▲
                     
+                    # ▼▼▼ o4-mini の回答を統合プロンプトに加える ▼▼▼
+                    if o4mini_thought and o4mini_status == "success":
+                        synthesis_prompt_text += f"==== 別視点からの回答案 (o4-mini / GitHub Models) ====\n{o4mini_thought}\n==== o4-mini ここまで ====\n\n"
+                    # ▲▲▲ o4-mini 追加ここまで ▲▲▲
+                    
                     # 統合指示の修正
-                    if enable_meta and (grok_thought or claude_thought or claude45_thought):
-                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude Opus 4.5, Claude 4.5 Sonnet) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    if enable_meta and (grok_thought or claude_thought or claude45_thought or o4mini_thought):
+                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude Opus 4.5, Claude 4.5 Sonnet, o4-mini) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
@@ -2104,6 +2212,13 @@ if prompt:
                     models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (Error)")
                 # ▲▲▲ Claude 4.5 Sonnet Status ここまで ▲▲▲
                 
+                # ▼▼▼ o4-mini Status ▼▼▼
+                if o4mini_status == "success":
+                    models_used.append(f"o4-mini (GitHub Models) (OK)")
+                elif o4mini_status == "error":
+                    models_used.append(f"o4-mini (GitHub Models) (Error)")
+                # ▲▲▲ o4-mini Status ここまで ▲▲▲
+                
                 
                 st.caption(f"🤖 使用モデル: {' + '.join(models_used)}")
                 
@@ -2129,6 +2244,11 @@ if prompt:
                     processing_history.append(f"**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
                 elif claude45_status == "error":
                     processing_history.append(f"**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 ⚠️ エラー")
+                
+                if o4mini_status == "success":
+                    processing_history.append(f"**Phase 1.5e**: o4-mini 独立思考 (GitHub Models) ✓")
+                elif o4mini_status == "error":
+                    processing_history.append(f"**Phase 1.5e**: o4-mini 独立思考 ⚠️ エラー")
                 
                 processing_history.append("**Phase 2**: Gemini 統合フェーズ")
                 
