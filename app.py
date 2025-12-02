@@ -161,17 +161,15 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str 
 
 
 
-def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False) -> str:
+def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
     Grok 4.1 Fast Free を使って、リサーチメモを元に独立した回答案を作成する
     enable_x_search=True の場合、X/Twitter情報の活用を促す
+    mode="full_max" の場合、独立したリード研究者として振る舞う
     """
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    
+    if not OPENROUTER_API_KEY:
+        return "OpenRouter API Key is missing."
+
     # X検索強化版の場合、特別な指示を追加
     x_search_instruction = ""
     if enable_x_search:
@@ -183,30 +181,138 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
             "架空の投稿や存在しない反応を作成しないこと。"
         )
     
-    user_content = (
-        f"ユーザーの質問:\n{user_question}\n\n"
-        f"調査メモ:\n{research_text}\n\n"
-        "指示:\n"
-        "あなたはGeminiとは別の独立したAIです。\n"
-        "上記の調査メモを参考にしつつも、あなた自身の視点で独立した回答案を作成してください。\n"
-        "Geminiの意見に合わせる必要はありません。"
-        f"{x_search_instruction}"
-    )
+    if mode == "full_max":
+        user_content = (
+            f"ユーザーの質問:\n{user_question}\n\n"
+            f"調査メモ:\n{research_text}\n\n"
+            "指示:\n"
+            "あなたは Gemini とは独立した立場のリード研究者です。\n"
+            "Gemini に遠慮する必要はありません。調査メモの事実を最優先しつつ、\n"
+            "特に『見落とされがちなリスク・反対意見・前提の穴』を指摘してください。\n"
+            "1) あなたなりの結論（短く）\n"
+            "2) Gemini が取りそうな結論との違い\n"
+            "3) 追加で考慮すべきリスクや条件\n"
+            f"{x_search_instruction}"
+        )
+    else:
+        user_content = (
+            f"ユーザーの質問:\n{user_question}\n\n"
+            f"調査メモ:\n{research_text}\n\n"
+            "指示:\n"
+            "あなたはGeminiとは別の独立したAIです。\n"
+            f"{x_search_instruction}\n"
+            "調査メモを元に、あなた自身の視点で回答案を作成してください。\n"
+            "Geminiの意見に合わせる必要はありません。\n"
+            "特に、調査メモの中で重要だと思う事実や、別の視点があれば強調してください。"
+        )
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://gemini-app.streamlit.app/", 
+        "X-Title": "Gemini Web Studio",
+    }
     
     data = {
-        "model": "x-ai/grok-2-1212",
+        "model": "x-ai/grok-2-vision-1212", # 無料枠のモデル
         "messages": [
             {"role": "user", "content": user_content}
         ],
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+
+    try:
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error calling Grok: {e}"
+
+def review_with_grok(user_question: str, gemini_answer: str, research_text: str, mode: str = "normal") -> str:
+    """
+    Grok 4.1 Fast Free を使って、Geminiの最終回答をレビューする
+    mode="onigunsou": 厳格な検察官としてレビュー
+    mode="full_max": ダブル鬼軍曹としてレビュー
+    """
+    if not OPENROUTER_API_KEY:
+        return "OpenRouter API Key is missing."
+
+    system_content = "あなたは厳格なレビューアです。"
+    
+    if mode == "onigunsou":
+        system_content = (
+            "あなたは鬼軍曹レベルの厳しい検察官です。\n"
+            "Gemini の回答を、『危険な誤り』『過度な断定』『論理の飛躍』の観点から容赦なくレビューします。\n"
+            "必要な場合のみ、回答の一部を修正・弱める提案をしてください。"
+        )
+        instruction = (
+            "以下のGeminiの回答を厳しくチェックしてください。\n"
+            "出力構成:\n"
+            "1. Critical errors (なければ『特になし』)\n"
+            "2. 修正提案(箇条書き)\n"
+            "3. 不確実なポイント"
+        )
+    elif mode == "full_max":
+        system_content = (
+            "あなたはGeminiと共に最高品質を目指すダブル鬼軍曹の一人です。\n"
+            "『危険な過信・過度な断定・情報の古さ』を徹底的に封じ込めてください。\n"
+            "問題が大きければ遠慮なく全文書き直すことも許可します。"
+        )
+        instruction = (
+            "以下のGeminiの回答を徹底的にレビューしてください。\n"
+            "出力構成:\n"
+            "1. Grok評価概要 (OK / 要修正 / 危険)\n"
+            "2. 重大な問題点 (箇条書き)\n"
+            "3. Grok版の最終回答全文 (必要な場合のみ)"
+        )
+    else:
+        instruction = (
+            "以下のGeminiの回答をレビューし、論理的な誤りや不足している視点があれば指摘してください。\n"
+            "また、より良い回答にするための改善案を提示してください。"
+        )
+
+    user_content = (
+        f"ユーザーの質問:\n{user_question}\n\n"
+        f"調査メモ:\n{research_text}\n\n"
+        f"Geminiの回答:\n{gemini_answer}\n\n"
+        f"指示:\n{instruction}"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://gemini-app.streamlit.app/", 
+        "X-Title": "Gemini Web Studio",
     }
     
+    data = {
+        "model": "x-ai/grok-2-vision-1212",
+        "messages": [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
+        ],
+        "temperature": 0.5, # レビューなので少し抑えめ
+        "max_tokens": 2000,
+    }
     try:
-        resp = requests.post(url, headers=headers, json=data, timeout=60)
-        resp.raise_for_status()
-        j = resp.json()
-        return j["choices"][0]["message"]["content"]
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"[Grok思考エラー: {e}]"
+        return f"Error calling Grok: {e}"
 
 def _extract_puter_text(message_content):
     """
@@ -1479,13 +1585,13 @@ if prompt:
                     )
 
                     # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
-                    # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
                     grok_thought = ""
                     grok_status = "skipped"
                     if enable_meta and OPENROUTER_API_KEY:
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
+                        grok_mode = "full_max" if "MAX" in response_mode else "default"
                         try:
-                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search)
+                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search, mode=grok_mode)
                             if grok_thought:
                                 grok_status = "success"
                                 status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
@@ -1497,7 +1603,6 @@ if prompt:
                             grok_status = "error"
                             status_container.write(f"⚠ Grok思考エラー: {e}")
 
-                    # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
                     # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
                     claude_thought = ""
                     claude_status = "skipped"
@@ -1697,16 +1802,22 @@ if prompt:
                         
                         # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 鬼軍曹モード全般) ---
                         # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
-                        use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and enable_strict)
-                        
+                        use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and (enable_strict or "鬼軍曹" in response_mode))
                         if use_grok_reviewer and OPENROUTER_API_KEY:
-                            status_container.write("Phase 3b: Grok 4.1 Fast で最終チェック中...")
+                            status_container.write("Grokによる最終レビュー実行中...")
+                            
+                            review_mode = "normal"
+                            if "鬼軍曹" in response_mode:
+                                review_mode = "onigunsou"
+                            elif "MAX" in response_mode:
+                                review_mode = "full_max"
+
                             try:
-                                grok_answer = review_with_grok(prompt, final_answer, research_text)
+                                grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode)
                                 # Grok使用時は、モデル名を明示し、2段構成で表示
                                 final_answer = (
                                     f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
-                                    f"**レビュア: Grok 4.1 Fast (free)**\n"
+                                    f"**レビュア: Grok 2 Vision 1212 (OpenRouter)**\n"
                                     f"**モード: {response_mode}**\n\n"
                                     "---\n\n"
                                     "## ✅ 最終回答（Gemini統合版）\n\n"
