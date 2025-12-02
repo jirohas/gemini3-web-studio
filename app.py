@@ -334,7 +334,7 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
             ],
             inferenceConfig={
                 "maxTokens": 5000,  # Thinking modeでは多めに確保
-                "temperature": 0.7,
+                "temperature": 1.0,  # Extended Thinking mode では必須
             },
             # Extended Thinking Mode を有効化
             additionalModelRequestFields={
@@ -345,17 +345,27 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
             }
         )
 
-        # 思考ブロックと回答テキストの取り出し
+        # 思考ブロックと回答テキストの取り出し (reasoningContent対応)
         thinking_blocks = []
         text_chunks = []
         output = resp.get("output", {})
         message = output.get("message", {})
         
         for part in message.get("content", []):
-            # Thinking block（思考プロセス）
-            if "thinking" in part:
-                thinking_blocks.append(part["thinking"])
-            # 通常のテキスト（回答）
+            # Extended Thinking の推論プロセス (reasoningContent)
+            if "reasoningContent" in part:
+                rc = part["reasoningContent"]
+                if isinstance(rc, dict):
+                    # reasoningText.text を取得
+                    rt = rc.get("reasoningText", {})
+                    if isinstance(rt, dict):
+                        t = rt.get("text")
+                        if t:
+                            thinking_blocks.append(t)
+                    # フォールバック: rc["text"] も試す
+                    elif "text" in rc:
+                        thinking_blocks.append(rc["text"])
+            # 最終回答テキスト
             elif "text" in part:
                 text_chunks.append(part["text"])
 
@@ -760,10 +770,10 @@ with st.sidebar:
             
             if mode_type == "grok強化(+mz/Az)":
                 response_mode = st.radio(
-                    "モード",
+                   "モード",
                     [
                         "熟考 + 鬼軍曹",
-                        "熟考 (本気MAX)",
+                        "熟考 (本気MAX)Az",
                         "熟考 (本気MAX)ms/Az",
                         "熟考(メタ思考)+grok検索強化版",
                     ],
