@@ -287,14 +287,15 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         return f"Error calling Grok: {e}"
 
 
-def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
+def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple[str, dict]:
     """
     AWS Bedrock 経由で Claude Sonnet 4.5 を使って独立した回答案を作成する
+    Returns: (回答テキスト, usage辞書)
     """
     if not HAS_BOTO3:
-        return "Error: boto3 library not installed. (pip install boto3)"
+        return ("Error: boto3 library not installed. (pip install boto3)", {})
     if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
-        return "Error: AWS credentials are missing."
+        return ("Error: AWS credentials are missing.", {})
 
     # Claude 4.5 への役割付与: 論理的推論とリスク指摘に特化
     system_prompt = (
@@ -345,11 +346,19 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> str:
             if "text" in part:
                 text_chunks.append(part["text"])
 
-        return "".join(text_chunks) if text_chunks else "[Claude 4.5 Sonnetからのテキストが空でした]"
+        # 使用量情報の取得
+        usage = resp.get("usage", {})
+        usage_dict = {
+            "inputTokens": usage.get("inputTokens", 0),
+            "outputTokens": usage.get("outputTokens", 0)
+        }
+
+        result_text = "".join(text_chunks) if text_chunks else "[Claude 4.5 Sonnetからのテキストが空でした]"
+        return (result_text, usage_dict)
 
     except Exception as e:
         # エラー詳細を返す
-        return f"Error calling Claude 4.5 Sonnet (Bedrock): {e}"
+        return (f"Error calling Claude 4.5 Sonnet (Bedrock): {e}", {})
 
 
 def _extract_puter_text(message_content):
@@ -1711,6 +1720,7 @@ if prompt:
                     # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
                     claude45_thought = ""
                     claude45_status = "skipped"
+                    claude45_usage = {}
 
                     # 発動条件: mz/Az または MAX モード && AWS認証情報設定済み
                     use_claude45 = (("Az" in mode_type or "MAX" in response_mode) and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
@@ -1721,13 +1731,25 @@ if prompt:
                             # 調査メモが長すぎる場合のエラー回避（40000文字に切り詰め）
                             safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
 
-                            claude45_thought = think_with_claude45_bedrock(prompt, safe_research_text)
+                            claude45_thought, claude45_usage = think_with_claude45_bedrock(prompt, safe_research_text)
 
                             if claude45_thought and not claude45_thought.startswith("Error"):
                                 claude45_status = "success"
                                 status_container.write(f"✓ Claude 4.5 Sonnet 独立思考完了")
                                 with status_container.expander(f"Claude 4.5 Sonnet の独立回答案", expanded=False):
                                     st.markdown(claude45_thought)
+                                
+                                # コスト計算 (Claude 4.5 Sonnet on Bedrock)
+                                # 料金: Input $3/MTok, Output $15/MTok
+                                if claude45_usage:
+                                    input_tokens = claude45_usage.get("inputTokens", 0)
+                                    output_tokens = claude45_usage.get("outputTokens", 0)
+                                    claude_cost = (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
+                                    st.session_state.session_cost += claude_cost
+                                    usage_stats["total_cost_usd"] += claude_cost
+                                    usage_stats["total_input_tokens"] += input_tokens
+                                    usage_stats["total_output_tokens"] += output_tokens
+                                    status_container.write(f"💰 Claude 4.5コスト: ${claude_cost:.4f} (In: {input_tokens}, Out: {output_tokens})")
                             else:
                                 claude45_status = "error"
                                 # エラー内容はExpanderの中に隠してUXを損なわないようにする
