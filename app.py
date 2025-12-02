@@ -983,6 +983,8 @@ with st.sidebar:
         save_manual_cost(manual_cost)
     
     st.link_button("💰 Google Cloud Console", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
+    st.link_button("☁️ AWS Free Tier Dashboard", "https://us-east-1.console.aws.amazon.com/costmanagement/home?region=us-east-1#/freetier")
+    st.caption("📘 GitHub Models: 使用状況は [Settings → Developer settings → Tokens](https://github.com/settings/tokens) で確認")
 
     st.markdown("---")
     st.code(f"PROJECT: {VERTEX_PROJECT}\nLOCATION: {VERTEX_LOCATION} (Vertex AI)")
