@@ -1376,8 +1376,8 @@ if prompt:
                         )
                         st.session_state.session_cost += cost
                         usage_stats["total_cost_usd"] += cost
-                        usage_stats["total_input_tokens"] += response.usage_metadata.prompt_token_count
-                        usage_stats["total_output_tokens"] += response.usage_metadata.candidates_token_count
+                        usage_stats["total_input_tokens"] += (response.usage_metadata.prompt_token_count or 0)
+                        usage_stats["total_output_tokens"] += (response.usage_metadata.candidates_token_count or 0)
 
                     # 鬼軍曹レビュー (通常モード版)
                     if enable_strict:
@@ -1400,8 +1400,8 @@ if prompt:
                             cost = calculate_cost(model_id, review_resp.usage_metadata.prompt_token_count, review_resp.usage_metadata.candidates_token_count)
                             st.session_state.session_cost += cost
                             usage_stats["total_cost_usd"] += cost
-                            usage_stats["total_input_tokens"] += review_resp.usage_metadata.prompt_token_count
-                            usage_stats["total_output_tokens"] += review_resp.usage_metadata.candidates_token_count
+                            usage_stats["total_input_tokens"] += (review_resp.usage_metadata.prompt_token_count or 0)
+                            usage_stats["total_output_tokens"] += (review_resp.usage_metadata.candidates_token_count or 0)
 
                 # =========================
                 # 熟考モード
@@ -1491,8 +1491,8 @@ if prompt:
                         )
                         st.session_state.session_cost += cost
                         usage_stats["total_cost_usd"] += cost
-                        usage_stats["total_input_tokens"] += research_resp.usage_metadata.prompt_token_count
-                        usage_stats["total_output_tokens"] += research_resp.usage_metadata.candidates_token_count
+                        usage_stats["total_input_tokens"] += (research_resp.usage_metadata.prompt_token_count or 0)
+                        usage_stats["total_output_tokens"] += (research_resp.usage_metadata.candidates_token_count or 0)
                     
                     # --- Phase 1.5: メタ質問エージェント ---
                     questions_text = ""
@@ -1545,8 +1545,8 @@ if prompt:
                             )
                             st.session_state.session_cost += cost
                             usage_stats["total_cost_usd"] += cost
-                            usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
-                            usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
+                            usage_stats["total_input_tokens"] += (question_resp.usage_metadata.prompt_token_count or 0)
+                            usage_stats["total_output_tokens"] += (question_resp.usage_metadata.candidates_token_count or 0)
 
                     # 多層+puterモードの鬼軍曹モードかチェック
                     is_puter_onigunsou = (
@@ -1711,8 +1711,8 @@ if prompt:
                         )
                         st.session_state.session_cost += cost
                         usage_stats["total_cost_usd"] += cost
-                        usage_stats["total_input_tokens"] += synthesis_resp.usage_metadata.prompt_token_count
-                        usage_stats["total_output_tokens"] += synthesis_resp.usage_metadata.candidates_token_count
+                        usage_stats["total_input_tokens"] += (synthesis_resp.usage_metadata.prompt_token_count or 0)
+                        usage_stats["total_output_tokens"] += (synthesis_resp.usage_metadata.candidates_token_count or 0)
                     
                     # --- Phase 3: レビューエージェント (鬼軍曹モードのみ) ---
                     if enable_strict:
@@ -1870,8 +1870,8 @@ if prompt:
                             )
                             st.session_state.session_cost += cost
                             usage_stats["total_cost_usd"] += cost
-                            usage_stats["total_input_tokens"] += review_resp.usage_metadata.prompt_token_count
-                            usage_stats["total_output_tokens"] += review_resp.usage_metadata.candidates_token_count
+                            usage_stats["total_input_tokens"] += (review_resp.usage_metadata.prompt_token_count or 0)
+                            usage_stats["total_output_tokens"] += (review_resp.usage_metadata.candidates_token_count or 0)
                     else:
                         final_answer = draft_answer
 
