@@ -1380,7 +1380,7 @@ if prompt:
                 # =========================
                 # β1通常モード以外はリサーチを実行
                 enable_research = "β1" not in response_mode
-                enable_meta = "メタ" in response_mode or "MAX" in response_mode
+                enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
                 enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
                 enable_grok_x_search = "grok" in response_mode
 
