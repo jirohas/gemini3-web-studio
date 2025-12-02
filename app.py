@@ -644,6 +644,7 @@ with st.sidebar:
                     [
                         "熟考 + 鬼軍曹 [+OpenAI]",
                         "熟考 (本気MAX) [+OpenAI]",
+                        "熟考 (本気MAX)ms/Az [+OpenAI]",
                         "熟考(メタ思考)+grok検索強化版 [+OpenAI]",
                     ],
                     index=1  # デフォルト: 本気MAX
@@ -664,7 +665,6 @@ with st.sidebar:
                     [
                         "熟考 + 鬼軍曹",
                         "熟考 (本気MAX)",
-                        "熟考 (本気MAX)ms/Az",
                         "熟考(メタ思考)+grok検索強化版",
                     ],
                     index=1  # デフォルト: 本気MAX
