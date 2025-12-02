@@ -632,13 +632,13 @@ with st.sidebar:
         with st.expander("モード設定(多層)", expanded=True):
             mode_type = st.radio(
                 "タイプ",
-                ["ms/Az", "grok通常モード", "grok強化モード", "その他"],
-                index=2,  # デフォルトをgrok強化モードに
+                ["grok強化(+mz/Az)", "grok通常モード", "grok強化モード", "その他"],
+                index=0,  # デフォルトをgrok強化(+mz/Az)に
                 horizontal=True,
                 label_visibility="collapsed"
             )
             
-            if mode_type == "ms/Az":
+            if mode_type == "grok強化(+mz/Az)":
                 response_mode = st.radio(
                     "モード",
                     [
