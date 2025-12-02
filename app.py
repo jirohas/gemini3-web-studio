@@ -1573,10 +1573,17 @@ if prompt:
                         with status_container.expander("生成されたメタ質問", expanded=False):
                             st.markdown(questions_text)
                         
-                        st.session_state.session_cost += cost
-                        usage_stats["total_cost_usd"] += cost
-                        usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
-                        usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
+                        # コスト計算
+                        if question_resp.usage_metadata:
+                            cost = calculate_cost(
+                                model_id,
+                                question_resp.usage_metadata.prompt_token_count,
+                                question_resp.usage_metadata.candidates_token_count,
+                            )
+                            st.session_state.session_cost += cost
+                            usage_stats["total_cost_usd"] += cost
+                            usage_stats["total_input_tokens"] += question_resp.usage_metadata.prompt_token_count
+                            usage_stats["total_output_tokens"] += question_resp.usage_metadata.candidates_token_count
 
                     # 多層+puterモードの鬼軍曹モードかチェック
                     is_puter_onigunsou = (
