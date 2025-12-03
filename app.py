@@ -196,7 +196,7 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
     }
     
     data = {
-        "model": "x-ai/grok-2-1212",  # 最新の無料版モデル
+        "model": "x-ai/grok-4.1-fast:free",  # Grok 4.1 Fast (free)
         "messages": [
             {"role": "user", "content": user_content}
         ],
@@ -275,7 +275,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     }
     
     data = {
-        "model": "x-ai/grok-2-1212",  # 最新の無料版モデル
+        "model": "x-ai/grok-4.1-fast:free",  # Grok 4.1 Fast (free)
         "messages": [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content}
