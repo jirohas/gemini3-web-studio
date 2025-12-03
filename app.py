@@ -1309,6 +1309,12 @@ with st.sidebar:
         margin-top: 0rem !important;
         margin-bottom: 0rem !important;
     }
+    
+    /* チャットメッセージ内のインラインコードを折り返す */
+    [data-testid="stChatMessageContent"] code {
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
