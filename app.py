@@ -196,7 +196,7 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
     }
     
     data = {
-        "model": "x-ai/grok-beta",  # 最新の無料版モデル
+        "model": "x-ai/grok-2-1212",  # 最新の無料版モデル
         "messages": [
             {"role": "user", "content": user_content}
         ],
@@ -275,7 +275,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     }
     
     data = {
-        "model": "x-ai/grok-beta",  # 最新の無料版モデル
+        "model": "x-ai/grok-2-1212",  # 最新の無料版モデル
         "messages": [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content}
@@ -2017,6 +2017,15 @@ function copyToClipboard(elementId) {{
                 if enable_meta:
                     if grok_status == "success":
                         models_used.append("Grok: 4.1-fast-free (OK)")
+                    elif grok_status == "error":
+                        models_used.append("Grok: 4.1-fast-free (Error)")
+                    elif grok_status == "empty":
+                        models_used.append("Grok: 4.1-fast-free (Empty)")
+                
+                # ▼▼▼ Claude 4.5 Sonnet Status ▼▼▼
+                if claude45_status == "success":
+                    models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (OK)")
+                elif claude45_status == "error":
                     models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (Error)")
                 # ▲▲▲ Claude 4.5 Sonnet Status ここまで ▲▲▲
                 
