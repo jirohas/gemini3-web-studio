@@ -1180,7 +1180,10 @@ with st.sidebar:
         # 結果表示 (ボタンの下に表示)
         if "recommendation_text" in st.session_state:
             st.markdown("---")
-            st.markdown(st.session_state.recommendation_text)
+            st.markdown(
+                f"<div class='recommendation-text'>{st.session_state.recommendation_text}</div>",
+                unsafe_allow_html=True
+            )
 
     # ---- 設定 (モデルなど) ----
     with st.expander("⚙️ 設定", expanded=False):
@@ -1276,13 +1279,23 @@ with st.sidebar:
     section[data-testid="stSidebar"] .stRadio > label > div {
         font-size: 10px !important;
     }
-    /* テキストを切り詰める（改行させない） */
+    /* サイドバーのセッション名などを1行に収める */
     section[data-testid="stSidebar"] label, 
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+    }
+    
+    /* 💡おすすめエリアだけは折り返し＆改行を許可 */
+    section[data-testid="stSidebar"] .recommendation-text,
+    section[data-testid="stSidebar"] .recommendation-text p {
+        white-space: pre-wrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        line-height: 1.4;
+        font-size: 11px;
     }
     /* 区切り線 */
     hr {
