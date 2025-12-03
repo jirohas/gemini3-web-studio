@@ -143,10 +143,11 @@ GITHUB_MODEL_ID = "o4-mini"
 
 def compact_newlines(text: str) -> str:
     """
-    3行以上の連続改行を2行（空行1つ）に圧縮する
+    2行以上の連続空行を1行（空行1つ）に圧縮する
     """
     import re
-    return re.sub(r"\n{3,}", "\n\n", text)
+    # 2行以上の連続改行（= 1行以上の空行）を1行の空行（改行2つ）に圧縮
+    return re.sub(r"\n\n+", "\n\n", text)
 
 def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
