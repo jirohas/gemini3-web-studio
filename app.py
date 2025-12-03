@@ -86,7 +86,7 @@ if not st.session_state.authenticated:
 # =========================
 
 import requests
-from curl_cffi import requests as crequests  # Puter用
+# curl_cffi は未使用のため削除（Puter廃止に伴い不要）
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
@@ -1784,10 +1784,11 @@ function copyToClipboard(elementId) {{
                         usage_stats["total_input_tokens"] += (research_resp.usage_metadata.prompt_token_count or 0)
                         usage_stats["total_output_tokens"] += (research_resp.usage_metadata.candidates_token_count or 0)
                     
-                    # --- Phase 1.3: 事実とリスクの抽出 ---
+                    # --- Phase 1.3: 事実とリスクの抽出 (ms/Azモードのみ) ---
                     fact_summary = ""
                     risk_summary = ""
-                    if enable_meta:  # ms/Azモードのみ
+                    is_ms_az_mode = "ms/Az" in response_mode
+                    if is_ms_az_mode:  # ms/Azモードでのみ重いJSON抽出を実行
                         status_container.write("Phase 1.3: 事実・リスク抽出中...")
                         fact_summary, risk_summary, phase13_usage = extract_facts_and_risks(
                             client, model_id, research_text
@@ -1888,8 +1889,9 @@ function copyToClipboard(elementId) {{
                     claude45_status = "skipped"
                     claude45_usage = {}
 
-                    # 発動条件: mz/Az または MAX モード && AWS認証情報設定済み
-                    use_claude45 = (("Az" in mode_type or "MAX" in response_mode) and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+                    # 発動条件: Azモード（本気MAXのAz系）のみ && AWS認証情報設定済み
+                    is_az_mode = "Az" in response_mode  # "熟考 (本気MAX)Az" or "熟考 (本気MAX)ms/Az"
+                    use_claude45 = (is_az_mode and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
 
                     if use_claude45:
                         status_container.write(f"Phase 1.5d: Claude 4.5 Sonnet (AWS Bedrock) 独立思考中...")
@@ -1934,8 +1936,7 @@ function copyToClipboard(elementId) {{
                     o4mini_thought = ""
                     o4mini_status = "skipped"
                     
-                    # 発動条件の事前準備
-                    is_ms_az_mode = "ms/Az" in response_mode
+                    # 発動条件の事前準備（is_ms_az_modeはPhase 1.3で定義済み）
                     # o4-mini用に入力を準備 - fact/risk summaryを優先使用
                     if fact_summary:
                         safe_research_text = f"{fact_summary[:1500]}\n\n{risk_summary[:1500]}"
