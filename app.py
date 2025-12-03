@@ -89,6 +89,47 @@ if not st.session_state.authenticated:
 
 import requests
 # curl_cffi は未使用のため削除（Puter廃止に伴い不要）
+import textwrap
+
+def wrap_recommendation_text(text, width=25):
+    """
+    推薦テキストを指定幅で自動改行（サイドバー表示用）
+    
+    Args:
+        text: 改行するテキスト
+        width: 1行の最大文字数
+    
+    Returns:
+        改行処理されたテキスト
+    """
+    lines = text.split('\n')
+    wrapped_lines = []
+    
+    for line in lines:
+        # 空行やマークダウン記号行はそのまま保持
+        stripped = line.strip()
+        if not stripped or stripped.startswith('-') and len(stripped) <= 3:
+            wrapped_lines.append(line)
+            continue
+        
+        # インデント（箇条書き）を保持
+        indent = len(line) - len(line.lstrip())
+        indent_str = ' ' * indent
+        
+        # 改行処理（単語の途中で切らない）
+        if len(stripped) > width:
+            wrapped = textwrap.fill(
+                stripped, 
+                width=width,
+                break_long_words=False,
+                break_on_hyphens=False,
+                subsequent_indent=indent_str
+            )
+            wrapped_lines.append(wrapped)
+        else:
+            wrapped_lines.append(line)
+    
+    return '\n'.join(wrapped_lines)
 
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
@@ -1100,7 +1141,8 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                st.session_state.recommendation_text = rec_text
+                # テキストを自動改行処理
+                st.session_state.recommendation_text = wrap_recommendation_text(rec_text)
         
         st.markdown("") # 隙間
 
@@ -1120,7 +1162,8 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                st.session_state.recommendation_text = rec_text
+                # テキストを自動改行処理
+                st.session_state.recommendation_text = wrap_recommendation_text(rec_text)
 
         # 結果表示 (ボタンの下に表示)
         if "recommendation_text" in st.session_state:
