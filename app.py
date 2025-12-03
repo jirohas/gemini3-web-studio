@@ -226,42 +226,52 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     if not OPENROUTER_API_KEY:
         return "OpenRouter API Key is missing."
 
-    system_content = "あなたは厳格なレビューアです。"
+    # 共通: Grokの役割を「レビューコメント専用」に厳しく制限
+    system_content = (
+        "あなたはGeminiの回答をチェックするレビューアです。\n"
+        "【重要な制約】\n"
+        "・Geminiの回答そのものを書き直したり、独自の最終回答を全文出してはいけません。\n"
+        "・あなたの役割は『危険な箇所・曖昧な箇所・弱めるべき表現』を指摘することだけです。\n"
+        "・2024年11月までの知識しか持っていないため、それ以降のAPI/モデルの実在を否定してはいけません。\n"
+        "・ユーザーが渡した調査メモやコードの事実を、あなた自身の知識よりも優先します。\n"
+        "・Webサイトを『今見た』かのような表現（例:『公式サイトを確認したところ〜』）を使ってはいけません。\n"
+        "・Markdownは使用してよいですが、連続する空行は1行までにしてください。\n"
+    )
     
     if mode == "onigunsou":
-        system_content = (
-            "あなたは鬼軍曹レベルの厳しい検察官です。\n"
-            "Gemini の回答を、『危険な誤り』『過度な断定』『論理の飛躍』の観点から容赦なくレビューします。\n"
-            "必要な場合のみ、回答の一部を修正・弱める提案をしてください。\n\n"
-            "⚠️ 重要な注意:\n"
+        system_content += (
+            "\n⚠️ 重要な注意:\n"
             "・あなたの知識は2024年11月までです\n"
             "・2024年12月以降の情報は「知識範囲外」と明記し、「存在しない」と断定しないでください\n"
             "・最新モデルやサービスについては「確認が必要」と記載してください"
         )
         instruction = (
-            "以下のGeminiの回答を厳しくチェックしてください。\n"
-            "出力構成:\n"
-            "1. Critical errors (なければ『特になし』)\n"
-            "2. 修正提案(箇条書き)\n"
-            "3. 不確実なポイント"
+            "以下の形式で、レビューコメントだけ返してください。\n\n"
+            "## 評価概要\n"
+            "- 回答は OK / 要修正 / 危険 のいずれかで評価してください。\n\n"
+            "## 問題点\n"
+            "- 箇条書きで、危険な誤り・過度な断定・論理の飛躍などを書いてください。\n\n"
+            "## 修正のポイント\n"
+            "- どの部分をどう弱める／書き換えるべきかだけを簡潔に示してください。\n\n"
+            "※ Geminiの回答全文を書き直したり、独自の最終回答を作らないでください。"
         )
     elif mode == "full_max":
-        system_content = (
-            "あなたはGeminiと共に最高品質を目指すダブル鬼軍曹の一人です。\n"
-            "『危険な過信・過度な断定・情報の古さ』を徹底的に封じ込めてください。\n"
-            "問題が大きければ遠慮なく全文書き直すことも許可します。\n\n"
-            "⚠️ 重要な注意:\n"
+        system_content += (
+            "\n⚠️ 重要な注意:\n"
             "・あなたの知識は2024年11月までです\n"
             "・2024年12月以降の最新情報（新モデル、新サービス等）は知識範囲外です\n"
             "・最新情報を「架空」「非存在」と断定せず、「2024年11月時点で確認できず、最新情報の可能性」と記載してください\n"
             "・リンク先確認を求める場合も、「存在しない」ではなく「確認推奨」と表現してください"
         )
         instruction = (
-            "以下のGeminiの回答を徹底的にレビューしてください。\n"
-            "出力構成:\n"
-            "1. Grok評価概要 (OK / 要修正 / 危険)\n"
-            "2. 重大な問題点 (箇条書き)\n"
-            "3. Grok版の最終回答全文 (必要な場合のみ)"
+            "以下の形式で、厳しめのレビューコメントだけ返してください。\n\n"
+            "## Grok評価概要\n"
+            "- OK / 要修正 / 危険 のいずれかで評価してください。\n\n"
+            "## 重大な問題点\n"
+            "- 箇条書きで、特にユーザーを誤誘導しそうな点だけ挙げてください。\n\n"
+            "## 改善のヒント\n"
+            "- どの論点を弱めたり、追加で注意書きすべきかを書いてください。\n\n"
+            "※ Geminiの回答全文を書き直したり、独自の最終回答を作らないでください。"
         )
     else:
         instruction = (
@@ -1418,7 +1428,8 @@ function copyToClipboard(elementId) {{
                     "2. **意図の汲み取り**: ユーザーの質問の背後にある意図（文脈、暗黙の前提）を推測し、言葉通りではなく「ユーザーが本当に知りたいこと」に答えてください。\n"
                     "3. **構造化された回答**: 結論を先に述べ、その後に詳細な根拠、シナリオ分析、リスク要因を論理的に展開してください。\n"
                     "4. **客観性**: 予測を行う場合は、断定を避け、複数のシナリオ（楽観、悲観、中立）を提示してください。\n"
-                    "5. **引用**: 検索を使用した場合は、必ず情報源を明示してください。"
+                    "5. **引用**: 検索を使用した場合は、必ず情報源を明示してください。\n"
+                    "6. **改行の制限**: Markdownは使用してよいですが、連続する空行は1行までにしてください。"
                 )
 
                 final_answer = ""
@@ -1647,7 +1658,7 @@ function copyToClipboard(elementId) {{
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
                         grok_mode = "full_max" if "MAX" in response_mode else "default"
                         try:
-                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search, mode=grok_mode)
+                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
                             if grok_thought:
                                 grok_status = "success"
                                 status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
@@ -1678,6 +1689,7 @@ function copyToClipboard(elementId) {{
                             safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
 
                             claude45_thought, claude45_usage = think_with_claude45_bedrock(prompt, safe_research_text)
+                            claude45_thought = claude45_thought.strip() if claude45_thought else ""
 
                             if claude45_thought and not claude45_thought.startswith("Error"):
                                 claude45_status = "success"
@@ -1726,6 +1738,7 @@ function copyToClipboard(elementId) {{
                         status_container.write(f"Phase 1.5e: o4-mini (GitHub Models) 独立思考中...")
                         try:
                             o4mini_thought, _ = think_with_o4_mini(prompt, safe_research_text)
+                            o4mini_thought = o4mini_thought.strip() if o4mini_thought else ""
                             
                             if o4mini_thought and not o4mini_thought.startswith("Error"):
                                 o4mini_status = "success"
@@ -1929,7 +1942,7 @@ function copyToClipboard(elementId) {{
                             elif "MAX" in response_mode:
                                 review_mode = "full_max"
 
-                            grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode)
+                            grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode).strip()
                             
                             # エラーチェック：Grokがエラー文字列を返した場合
                             if grok_answer.startswith("Error calling Grok:"):
