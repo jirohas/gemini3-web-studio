@@ -1153,8 +1153,8 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                # テキストを自動改行処理
-                st.session_state.recommendation_text = wrap_recommendation_text(rec_text)
+                # テキストをそのまま保存（CSSで自動折り返し）
+                st.session_state.recommendation_text = rec_text
         
         st.markdown("") # 隙間
 
@@ -1174,8 +1174,8 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                # テキストを自動改行処理
-                st.session_state.recommendation_text = wrap_recommendation_text(rec_text)
+                # テキストをそのまま保存（CSSで自動折り返し）
+                st.session_state.recommendation_text = rec_text
 
         # 結果表示 (ボタンの下に表示)
         if "recommendation_text" in st.session_state:
