@@ -159,27 +159,37 @@ def save_sessions(sessions):
 
 @st.cache_resource
 def get_client():
-    # Streamlit Cloud用の認証（Service Account）
-    if "GOOGLE_CREDENTIALS" in st.secrets:
-        from google.oauth2 import service_account
-        creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
-        scoped_creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        return genai.Client(
-            vertexai=True,
-            project=VERTEX_PROJECT,
-            location=VERTEX_LOCATION,
-            credentials=scoped_creds
-        )
-    
-    # ローカル環境用（ADC）
-    return genai.Client(
-        vertexai=True,
-        project=VERTEX_PROJECT,
-        location=VERTEX_LOCATION,
-    )
+    """
+    Vertex AI クライアントを初期化（エラー時はNoneを返す）
+    """
+    try:
+        # Streamlit Cloud用の認証（Service Account）
+        if "GOOGLE_CREDENTIALS" in st.secrets:
+            from google.oauth2 import service_account
+            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
+            scoped_creds = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            return genai.Client(
+                vertexai=True,
+                project=VERTEX_PROJECT,
+                location=VERTEX_LOCATION,
+                credentials=scoped_creds
+            )
+        else:
+            # ローカル開発用（Application Default Credentials）
+            return genai.Client(
+                vertexai=True,
+                project=VERTEX_PROJECT,
+                location=VERTEX_LOCATION,
+            )
+    except Exception as e:
+        # エラー時はNoneを返す（アプリを止めない）
+        print(f"❌ Vertex AI初期化エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 # =========================
 # User Profile Management
