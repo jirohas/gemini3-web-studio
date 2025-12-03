@@ -1067,44 +1067,44 @@ with st.sidebar:
     
     # ---- おすすめ ----
     with st.expander("💡 おすすめ", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✨ 提案を生成", use_container_width=True):
-                with st.spinner("あなたへのおすすめを生成中..."):
-                    client = get_client()
-                    user_profile = load_user_profile()
-                    rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
-                    
-                    # コスト加算
-                    cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
-                    st.session_state.session_cost += cost
-                    
-                    # グローバル使用量の更新
-                    usage_stats["total_cost_usd"] += cost
-                    usage_stats["total_input_tokens"] += usage["input_tokens"]
-                    usage_stats["total_output_tokens"] += usage["output_tokens"]
-                    save_usage(usage_stats)
-                    
-                    st.markdown(rec_text)
+        # ボタンを縦に配置して見切れを防止
+        if st.button("✨ 提案を生成 (直近のみ)", use_container_width=True):
+            with st.spinner("あなたへのおすすめを生成中..."):
+                client = get_client()
+                user_profile = load_user_profile()
+                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
+                
+                # コスト加算
+                cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
+                st.session_state.session_cost += cost
+                
+                # グローバル使用量の更新
+                usage_stats["total_cost_usd"] += cost
+                usage_stats["total_input_tokens"] += usage["input_tokens"]
+                usage_stats["total_output_tokens"] += usage["output_tokens"]
+                save_usage(usage_stats)
+                
+                st.markdown(rec_text)
         
-        with col2:
-            if st.button("🔥 本気の提案 (全履歴)", use_container_width=True):
-                with st.spinner("全履歴を分析して本気の提案を生成中..."):
-                    client = get_client()
-                    user_profile = load_user_profile()
-                    rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
-                    
-                    # コスト加算 (gemini-2.0-flash)
-                    cost = calculate_cost("gemini-2.0-flash", usage["input_tokens"], usage["output_tokens"])
-                    st.session_state.session_cost += cost
-                    
-                    # グローバル使用量の更新
-                    usage_stats["total_cost_usd"] += cost
-                    usage_stats["total_input_tokens"] += usage["input_tokens"]
-                    usage_stats["total_output_tokens"] += usage["output_tokens"]
-                    save_usage(usage_stats)
-                    
-                    st.markdown(rec_text)
+        st.markdown("") # 少し隙間を空ける
+
+        if st.button("🔥 本気の提案 (全履歴)", use_container_width=True):
+            with st.spinner("全履歴を分析して本気の提案を生成中..."):
+                client = get_client()
+                user_profile = load_user_profile()
+                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
+                
+                # コスト加算 (gemini-2.0-flash)
+                cost = calculate_cost("gemini-2.0-flash", usage["input_tokens"], usage["output_tokens"])
+                st.session_state.session_cost += cost
+                
+                # グローバル使用量の更新
+                usage_stats["total_cost_usd"] += cost
+                usage_stats["total_input_tokens"] += usage["input_tokens"]
+                usage_stats["total_output_tokens"] += usage["output_tokens"]
+                save_usage(usage_stats)
+                
+                st.markdown(rec_text)
 
     # ---- 設定 (モデルなど) ----
     with st.expander("⚙️ 設定", expanded=False):
