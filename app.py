@@ -149,6 +149,101 @@ def compact_newlines(text: str) -> str:
     # 2行以上の連続改行（= 1行以上の空行）を1行の空行（改行2つ）に圧縮
     return re.sub(r"\n\n+", "\n\n", text)
 
+def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple:
+    """
+    research_textから事実とリスクを分離抽出
+    
+    Args:
+        client: Vertex AI client
+        model_id: モデルID
+        research_text: 調査結果テキスト
+    
+    Returns:
+        (fact_summary, risk_summary): 事実とリスクの要約
+    """
+    extraction_prompt = f"""以下の調査結果から、事実とリスクを分離してください。
+
+【調査結果】
+{research_text[:8000]}
+
+【出力形式】
+## 事実（Facts）
+- 確認された情報のみを箇条書き（5-10項目）
+- 日付、数値、引用元を含める
+
+## リスク・不確実性（Risks）
+- 不明な点、懸念事項を箇条書き（3-7項目）
+- 各項目は簡潔に"""
+    
+    config = types.GenerateContentConfig(
+        temperature=0.2,  # 低温で正確に
+        system_instruction="事実とリスクを正確に分離する専門家として振る舞ってください。連続する空行は1行までにしてください。"
+    )
+    
+    try:
+        response = client.models.generate_content(
+            model=model_id,
+            contents=extraction_prompt,
+            config=config
+        )
+        text = extract_text_from_response(response).strip()
+        
+        # 事実とリスクを分離
+        if "## リスク" in text or "## Risks" in text:
+            parts = text.split("##")
+            fact_summary = parts[1] if len(parts) > 1 else text[:len(text)//2]
+            risk_summary = parts[2] if len(parts) > 2 else text[len(text)//2:]
+        else:
+            # 分離できない場合は半分に
+            mid = len(text) // 2
+            fact_summary = text[:mid]
+            risk_summary = text[mid:]
+        
+        return fact_summary.strip(), risk_summary.strip()
+    except Exception as e:
+        # エラー時は元のテキストを返す
+        mid = len(research_text) // 2
+        return research_text[:mid], research_text[mid:]
+
+def build_session_memory(sessions: list, current_session_id: str, max_entries: int = 10) -> str:
+    """
+    過去セッションから重要な文脈を抽出
+    
+    Args:
+        sessions: すべてのセッション
+        current_session_id: 現在のセッションID
+        max_entries: 最大エントリ数
+    
+    Returns:
+        セッション記憶のテキスト
+    """
+    # 現在のセッションを除外
+    past_sessions = [s for s in sessions if s["id"] != current_session_id]
+    
+    if not past_sessions:
+        return ""
+    
+    # 最新のmax_entriesセッションを取得
+    recent_sessions = past_sessions[-max_entries:]
+    
+    # ユーザーの質問と重要な判断を抽出
+    key_contexts = []
+    for session in recent_sessions:
+        for msg in session.get("messages", []):
+            if msg["role"] == "user" and len(msg["content"]) > 50:
+                # 十分な長さの質問のみ
+                key_contexts.append(msg["content"][:200])
+    
+    if not key_contexts:
+        return ""
+    
+    # 簡易要約
+    memory_text = "【過去の文脈・判断基準】\n"
+    memory_text += "\n".join([f"- {ctx}..." for ctx in key_contexts[-5:]])
+    memory_text += "\n\n"
+    
+    return memory_text
+
 def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
     Grok 4.1 Fast Free を使って、リサーチメモを元に独立した回答案を作成する
@@ -1559,6 +1654,13 @@ function copyToClipboard(elementId) {{
                     # 過去の関連コンテキストを取得
                     past_context = get_relevant_context(prompt, st.session_state.sessions, st.session_state.current_session_id)
                     
+                    # セッション間記憶を取得
+                    session_memory = build_session_memory(
+                        st.session_state.sessions,
+                        st.session_state.current_session_id,
+                        max_entries=10
+                    )
+                    
                     # リサーチ用のコンテンツを構築
                     import datetime as dt
                     current_date = dt.datetime.now().strftime("%Y年%m月%d日")
@@ -1566,6 +1668,10 @@ function copyToClipboard(elementId) {{
                         f"重要: 今日は{current_date}です。この日付より新しい情報を優先してください。\n\n"
                         f"質問: {prompt}"
                     ))]
+                    
+                    # セッション記憶を先頭に追加
+                    if session_memory:
+                        research_parts.insert(0, types.Part(text=session_memory))
                     
                     if past_context:
                         research_parts.insert(0, types.Part(text="以下は過去の関連チャットから抽出したコンテキストです：\n\n" + past_context))
@@ -1608,6 +1714,28 @@ function copyToClipboard(elementId) {{
                         usage_stats["total_cost_usd"] += cost
                         usage_stats["total_input_tokens"] += (research_resp.usage_metadata.prompt_token_count or 0)
                         usage_stats["total_output_tokens"] += (research_resp.usage_metadata.candidates_token_count or 0)
+                    
+                    # --- Phase 1.3: 事実とリスクの抽出 ---
+                    fact_summary = ""
+                    risk_summary = ""
+                    if enable_meta:  # ms/Azモードのみ
+                        status_container.write("Phase 1.3: 事実・リスク抽出中...")
+                        fact_summary, risk_summary = extract_facts_and_risks(
+                            client, model_id, research_text
+                        )
+                        status_container.write("✓ Phase 1.3完了")
+                        with status_container.expander("抽出された事実とリスク", expanded=False):
+                            st.markdown(f"### 📊 事実\n{fact_summary}\n\n### ⚠️ リスク\n{risk_summary}")
+                        
+                        # コスト計算 (Phase 1.3)
+                        # extract_facts_and_risksは内部でAPIコールするため、レスポンスが返れば計算可能
+                        # 簡易実装として、おおよそのトークン数を推定
+                        estimated_input = len(research_text[:8000]) // 4
+                        estimated_output = (len(fact_summary) + len(risk_summary)) // 4
+                        phase13_cost = calculate_cost(model_id, estimated_input, estimated_output)
+                        st.session_state.session_cost += phase13_cost
+                        usage_stats["total_cost_usd"] += phase13_cost
+
                     
                     # --- Phase 1.5: メタ質問エージェント ---
                     questions_text = ""
@@ -1676,7 +1804,9 @@ function copyToClipboard(elementId) {{
                         status_container.write("Phase 1.5b: Grok 独立思考中...")
                         grok_mode = "full_max" if "MAX" in response_mode else "default"
                         try:
-                            grok_thought = think_with_grok(prompt, research_text, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
+                            # fact/risk summaryがあれば使用、なければresearch_text
+                            grok_input = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}" if fact_summary else research_text
+                            grok_thought = think_with_grok(prompt, grok_input, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
                             if grok_thought:
                                 grok_status = "success"
                                 status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
@@ -1703,8 +1833,11 @@ function copyToClipboard(elementId) {{
                     if use_claude45:
                         status_container.write(f"Phase 1.5d: Claude 4.5 Sonnet (AWS Bedrock) 独立思考中...")
                         try:
-                            # 調査メモが長すぎる場合のエラー回避（40000文字に切り詰め）
-                            safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
+                            # Claude 4.5 Sonnet へはfact/risk summaryを渡す
+                            if fact_summary:
+                                safe_research_text = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}"
+                            else:
+                                safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
 
                             claude45_thought, claude45_usage = think_with_claude45_bedrock(prompt, safe_research_text)
                             claude45_thought = claude45_thought.strip() if claude45_thought else ""
@@ -1742,7 +1875,11 @@ function copyToClipboard(elementId) {{
                     
                     # 発動条件の事前準備
                     is_ms_az_mode = "ms/Az" in response_mode
-                    safe_research_text = research_text[:3000]  # リサーチテキストを3000文字に切り詰め
+                    # o4-mini用に入力を準備 - fact/risk summaryを優先使用
+                    if fact_summary:
+                        safe_research_text = f"{fact_summary[:1500]}\n\n{risk_summary[:1500]}"
+                    else:
+                        safe_research_text = research_text[:3000]  # リサーチテキストを3000文字に切り詰め
                     input_text_for_o4 = f"{prompt}\n\n{safe_research_text}"
                     
                     # 発動条件: ms/Azモード && GitHub Token && 実際の入力が3800文字以下
