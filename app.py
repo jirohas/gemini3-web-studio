@@ -97,19 +97,7 @@ try:
 except:
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# Puter 認証情報
-PUTER_USERNAME = None
-PUTER_PASSWORD = None
-try:
-    if "PUTER_USERNAME" in st.secrets:
-        PUTER_USERNAME = st.secrets["PUTER_USERNAME"]
-        PUTER_PASSWORD = st.secrets["PUTER_PASSWORD"]
-    else:
-        PUTER_USERNAME = os.getenv("PUTER_USERNAME")
-        PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
-except Exception:
-    PUTER_USERNAME = os.getenv("PUTER_USERNAME")
-    PUTER_PASSWORD = os.getenv("PUTER_PASSWORD")
+# Puter認証情報は削除（AWS Bedrockに移行）
 
 
 # ▼▼▼ AWS Bedrock (Claude 4.5 Sonnet用) ▼▼▼
@@ -472,139 +460,7 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
         return (f"Error calling o4-mini (GitHub Models): {e}", {})
 
 
-def _extract_puter_text(message_content):
-    """
-    puter.ai.chat の返り値から テキストだけを取り出す
-    """
-    if isinstance(message_content, str):
-        return message_content
-
-    if isinstance(message_content, list):
-        chunks = []
-        for part in message_content:
-            if isinstance(part, dict) and part.get("type") == "text":
-                chunks.append(part.get("text", ""))
-        return "".join(chunks)
-
-    return str(message_content)
-
-
-def call_claude_opus_via_puter(
-    user_question: str,
-    research_text: str | None = None,
-    system_prompt: str | None = None,
-) -> str:
-    """
-    Claude Opus 4.5（puter.com）で推論させる同期関数
-    curl_cffiでChrome 124を偽装して直接APIを叩く
-    """
-    if not PUTER_USERNAME or not PUTER_PASSWORD:
-        return "[Claude (puter) 認証情報未設定]"
-
-    # 1. Prepare Headers (Chrome 124 Masquerading)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9,ja;q=0.8",
-        "Origin": "https://puter.com",
-        "Referer": "https://puter.com/",
-        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"macOS"',
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site",
-        "Content-Type": "application/json"
-    }
-
-    token = st.session_state.get("puter_token")
-
-    # トークンがない、または再試行が必要な場合のログイン関数
-    def perform_login():
-        try:
-            resp = crequests.post(
-                "https://api.puter.com/login",
-                json={"username": PUTER_USERNAME, "password": PUTER_PASSWORD},
-                headers=headers,
-                timeout=30,
-                impersonate="chrome124"
-            )
-            if resp.status_code != 200:
-                return None, f"[Claude Login Error] Status: {resp.status_code}"
-            
-            new_token = resp.json().get("token")
-            if not new_token:
-                return None, "[Claude Login Error] Token not found"
-            
-            return new_token, None
-        except Exception as e:
-            return None, f"[Claude Login Error] {str(e)}"
-
-    # トークンがない場合はログイン
-    if not token:
-        token, error = perform_login()
-        if error:
-            return error
-        st.session_state.puter_token = token
-
-    # 2. Chat
-    chat_url = "https://api.puter.com/drivers/call"
-    
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-
-    user_content = f"ユーザーの質問:\n{user_question}\n\n"
-    if research_text:
-        user_content += f"調査メモ:\n{research_text}\n\n"
-        user_content += "この調査メモの事実を優先して回答してください。\n"
-
-    messages.append({
-        "role": "user",
-        "content": user_content,
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
-    
-    payload = {
-        "interface": "puter-chat-completion",
-        "driver": "claude",
-        "method": "complete",
-        "args": {
-            "messages": messages,
-            "model": "claude-opus-4-5",
-            "stream": False
-        }
-    }
-
-    try:
-        # 初回トライ
-        auth_headers = headers.copy()
-        auth_headers["Authorization"] = f"Bearer {token}"
-        chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome124")
-
-        # 401/403の場合は再ログイン
-        if chat_resp.status_code in [401, 403]:
-            token, error = perform_login()
-            if error:
-                return error
-            st.session_state.puter_token = token
-            
-            # リトライ
-            auth_headers["Authorization"] = f"Bearer {token}"
-            chat_resp = crequests.post(chat_url, json=payload, headers=auth_headers, timeout=120, impersonate="chrome124")
-
-        if chat_resp.status_code != 200:
-            return f"[Claude API Error] Status: {chat_resp.status_code}"
-            
-        result = chat_resp.json()
-        if not result.get("success", False):
-             return f"[Claude API Error] {result.get('error', 'Unknown error')}"
-
-        message = result["result"]["message"]
-        return _extract_puter_text(message.get("content"))
-
-    except Exception as e:
-        return f"[Claude Error] {str(e)}"
+# Puter関連の関数は削除（AWS Bedrockに移行）
 
 def create_new_session():
     current_sessions = load_sessions()
@@ -834,8 +690,8 @@ with st.sidebar:
     # ---- モードカテゴリ選択 ----
     mode_category = st.radio(
         "使用するモード",
-        ["🎯 回答モード(多層)", "🎯 回答モード(通常)", "β：🎯 回答モード(多層+puter)"],
-        index=0,  # デフォルトを多層モードに変更
+        ["🎯 回答モード(多層)", "🎯 回答モード(通常)"],
+        index=0,  #デフォルトを多層モードに変更
         horizontal=True,
     )
     
@@ -891,43 +747,7 @@ with st.sidebar:
                     index=0
                 )
     
-    # ---- 多層+puterモード ----
-    elif mode_category == "β：🎯 回答モード(多層+puter)":
-        with st.expander("モード設定(多層+puter)", expanded=True):
-            mode_type = st.radio(
-                "タイプ",
-                ["選択1 (完全版)", "選択2 (不完全版)", "ベータ版"],
-                index=0,
-                horizontal=True,
-                label_visibility="collapsed"
-            )
-            
-            if mode_type == "選択1 (完全版)":
-                response_mode = st.radio(
-                    "モード",
-                    [
-                        "1. 熟考 + 鬼軍曹(local/セ❎️)",
-                        "2. 熟考 (メタ思考)",
-                        "3. 熟考 (本気MAX)",
-                    ],
-                    index=0  # デフォルトを鬼軍曹に変更
-                )
-            elif mode_type == "選択2 (不完全版)":
-                response_mode = st.radio(
-                    "モード",
-                    [
-                        "1. 熟考 (リサーチ)",
-                    ],
-                    index=0
-                )
-            else:
-                response_mode = st.radio(
-                    "モード",
-                    [
-                        "β1. 通常 (高速)",
-                    ],
-                    index=0
-                )
+    # Puterモードは削除（AWS Bedrockに移行）
     
     # ---- 通常モード ----
     else:
@@ -1806,35 +1626,9 @@ if prompt:
                             grok_status = "error"
                             status_container.write(f"⚠ Grok思考エラー: {e}")
 
-                    # --- Phase 1.5c: Claude Opus 4.5 独立思考 (多層+puterの鬼軍曹のみ) ---
+                    # Phase 1.5c: Puterは削除（AWS Bedrockに移行）
                     claude_thought = ""
                     claude_status = "skipped"
-                    if is_puter_onigunsou and PUTER_USERNAME and PUTER_PASSWORD:
-                        status_container.write("Phase 1.5c: Claude Opus 4.5 独立思考中...")
-                        try:
-                            claude_thought = call_claude_opus_via_puter(
-                                user_question=prompt,
-                                research_text=research_text,
-                                system_prompt=(
-                                    "あなたは Claude Opus 4.5 です。"
-                                    "Gemini が集めた調査メモを参考にしつつも、"
-                                    "自分の視点で独立した回答案・気づきを出してください。"
-                                    "Gemini の意見に合わせる必要はありません。"
-                                ),
-                            )
-                            if claude_thought and not claude_thought.startswith("[Claude"):
-                                claude_status = "success"
-                                status_container.write("✓ Claude Opus 4.5 (via Puter) 独立思考完了")
-                                with status_container.expander("Claude Opus 4.5 の独立回答案", expanded=False):
-                                    st.markdown(claude_thought)
-                            else:
-                                claude_status = "error"
-                                status_container.write(f"⚠ Claudeエラー: {claude_thought}")
-                                claude_thought = ""  # エラーの場合は空にする
-                        except Exception as e:
-                            claude_status = "error"
-                            status_container.write(f"⚠ Claude思考エラー: {e}")
-                            claude_thought = ""
 
                     # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
                     claude45_thought = ""
@@ -1971,9 +1765,6 @@ if prompt:
                     
                     if enable_meta and grok_thought:
                         synthesis_prompt_text += f"==== 別視点からの回答案 (Grok) ====\n{grok_thought}\n==== 別視点ここまで ====\n\n"
-                    
-                    if is_puter_onigunsou and claude_thought:
-                        synthesis_prompt_text += f"==== 別視点からの回答案 (Claude Opus 4.5 via Puter) ====\n{claude_thought}\n==== Claude別視点ここまで ====\n\n"
                     
                     
                     # ▼▼▼ Claude 4.5 の回答を統合プロンプトに加える ▼▼▼
@@ -2200,23 +1991,6 @@ if prompt:
                 if enable_meta:
                     if grok_status == "success":
                         models_used.append("Grok: 4.1-fast-free (OK)")
-                    elif grok_status == "error":
-                        models_used.append("Grok: 4.1-fast-free (Error)")
-                    elif grok_status == "empty":
-                        models_used.append("Grok: 4.1-fast-free (Empty)")
-                
-                # Claude Status
-                if is_puter_onigunsou:
-                    if claude_status == "success":
-                        models_used.append("Claude: Opus 4.5 (via Puter) (OK)")
-                    elif claude_status == "error":
-                        models_used.append("Claude: Opus 4.5 (via Puter) (Error)")
-                
-                
-                # ▼▼▼ Claude 4.5 Sonnet Status ▼▼▼
-                if claude45_status == "success":
-                    models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (OK)")
-                elif claude45_status == "error":
                     models_used.append(f"Claude 4.5 Sonnet (AWS Bedrock) (Error)")
                 # ▲▲▲ Claude 4.5 Sonnet Status ここまで ▲▲▲
                 
