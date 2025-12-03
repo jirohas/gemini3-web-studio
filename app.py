@@ -141,7 +141,12 @@ GITHUB_MODEL_ID = "o4-mini"
 # Session Management
 # =========================
 
-
+def compact_newlines(text: str) -> str:
+    """
+    3行以上の連続改行を2行（空行1つ）に圧縮する
+    """
+    import re
+    return re.sub(r"\n{3,}", "\n\n", text)
 
 def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
@@ -1874,6 +1879,7 @@ function copyToClipboard(elementId) {{
                         usage_stats["total_output_tokens"] += (synthesis_resp.usage_metadata.candidates_token_count or 0)
                     
                     # --- Phase 3: レビューエージェント (鬼軍曹モードのみ) ---
+                    grok_review_status = "skipped"  # デフォルト値（Phase 3実行しない場合も安全）
                     if enable_strict:
                         status_container.write("Phase 3: レビューフェーズ実行中...")
                         
@@ -1932,7 +1938,6 @@ function copyToClipboard(elementId) {{
                         # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 鬼軍曹モード全般) ---
                         # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
                         use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and (enable_strict or "鬼軍曹" in response_mode))
-                        grok_review_status = "skipped"  # デフォルトはskipped
                         if use_grok_reviewer and OPENROUTER_API_KEY:
                             status_container.write("Grokによる最終レビュー実行中...")
                             
@@ -2142,6 +2147,9 @@ function copyToClipboard(elementId) {{
                         + final_answer
                     )
                 
+                # 改行圧縮：3行以上の連続改行を2行に圧縮
+                final_answer_with_history = compact_newlines(final_answer_with_history)
+                
                 # コピーボタン付き回答表示
                 import html
                 escaped_answer = html.escape(final_answer_with_history)
@@ -2222,7 +2230,7 @@ function copyToClipboard(elementId) {{
 
                 messages.append({
                     "role": "model",
-                    "content": final_answer,
+                    "content": final_answer_with_history,  # 処理履歴込みで保存
                     "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
                 update_current_session_messages(messages)
