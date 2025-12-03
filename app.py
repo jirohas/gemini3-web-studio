@@ -1203,7 +1203,7 @@ with st.sidebar:
         st.caption(f"AWS: {'✅' if AWS_ACCESS_KEY_ID else '❌'}")
         st.caption(f"OpenRouter: {'✅' if OPENROUTER_API_KEY else '❌'}")
         st.caption(f"GitHub: {'✅' if GITHUB_TOKEN else '❌'}")
-        st.caption(f"Puter: {'✅' if PUTER_USERNAME else '❌'}")
+        # Puterは非表示（セキュリティ上の理由）
     # ▲▲▲ Debug ▲▲▲
 
     st.markdown("---")
