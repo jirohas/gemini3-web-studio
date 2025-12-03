@@ -411,10 +411,8 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
     if not GITHUB_TOKEN:
         return ("Error: GitHub Token is missing.", {})
     
-    # 入力文字数チェック (4000文字 ≈ 4000トークン)
-    input_text = f"{user_question}\n\n{research_text}"
-    if len(input_text) > 4000:
-        return ("Error: Input too long for o4-mini (limit: 4000 chars)", {})
+    # 長さチェックは呼び出し側で実施済み（3800文字以下を保証）
+    
     
     system_prompt = (
         "あなたはGeminiとは独立したAIアドバイザーです。\n"
@@ -1699,19 +1697,25 @@ function copyToClipboard(elementId) {{
                             status_container.write(f"⚠ Claude 4.5 Sonnet 処理エラー: {e}")
                     # ▲▲▲ Phase 1.5d ここまで ▲▲▲
 
-                    # ▼▼▼ Phase 1.5e: GitHub Models (o4-mini) 独立思考 (ms/Azモードのみ) ▼▼▼
+                    # ▼▼▼ Phase 1.5e: o4-mini (GitHub Models) 独立思考 (ms/Azモードのみ) ▼▼▼
                     o4mini_thought = ""
                     o4mini_status = "skipped"
                     
-                    # 発動条件: ms/Azモード && GitHub Token設定済み && input < 4000文字
-                    use_o4mini = ("ms/Az" in response_mode and GITHUB_TOKEN and len(research_text) <= 4000)
+                    # 発動条件の事前準備
+                    is_ms_az_mode = "ms/Az" in response_mode
+                    safe_research_text = research_text[:3000]  # リサーチテキストを3000文字に切り詰め
+                    input_text_for_o4 = f"{prompt}\n\n{safe_research_text}"
+                    
+                    # 発動条件: ms/Azモード && GitHub Token && 実際の入力が3800文字以下
+                    use_o4mini = (
+                        is_ms_az_mode
+                        and GITHUB_TOKEN
+                        and len(input_text_for_o4) <= 3800
+                    )
                     
                     if use_o4mini:
                         status_container.write(f"Phase 1.5e: o4-mini (GitHub Models) 独立思考中...")
                         try:
-                            # 調査メモが長すぎる場合のエラー回避（3500文字に切り詰め、質問分の余裕を確保）
-                            safe_research_text = research_text[:3500] if len(research_text) > 3500 else research_text
-                            
                             o4mini_thought, _ = think_with_o4_mini(prompt, safe_research_text)
                             
                             if o4mini_thought and not o4mini_thought.startswith("Error"):
@@ -1726,8 +1730,9 @@ function copyToClipboard(elementId) {{
                         except Exception as e:
                             o4mini_status = "error"
                             status_container.write(f"⚠ o4-mini 処理エラー: {e}")
-                    elif "ms/Az" in response_mode and len(research_text) > 4000:
-                        status_container.write(f"ℹ️ o4-mini スキップ (入力長: {len(research_text)} > 4000文字)")
+                    elif is_ms_az_mode and GITHUB_TOKEN and len(input_text_for_o4) > 3800:
+                        status_container.write(f"ℹ️ o4-mini スキップ (入力長: {len(input_text_for_o4)} > 3800文字)")
+                        o4mini_status = "skipped"
                     # ▲▲▲ Phase 1.5e ここまで ▲▲▲
 
                     # --- Phase 2: 統合エージェント ---
@@ -1905,6 +1910,7 @@ function copyToClipboard(elementId) {{
                         # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 鬼軍曹モード全般) ---
                         # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
                         use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and (enable_strict or "鬼軍曹" in response_mode))
+                        grok_review_status = "skipped"  # デフォルトはskipped
                         if use_grok_reviewer and OPENROUTER_API_KEY:
                             status_container.write("Grokによる最終レビュー実行中...")
                             
@@ -1914,8 +1920,15 @@ function copyToClipboard(elementId) {{
                             elif "MAX" in response_mode:
                                 review_mode = "full_max"
 
-                            try:
-                                grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode)
+                            grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode)
+                            
+                            # エラーチェック：Grokがエラー文字列を返した場合
+                            if grok_answer.startswith("Error calling Grok:"):
+                                grok_review_status = "error"
+                                status_container.write("⚠ Grok 最終レビューはエラーのためスキップしました")
+                                # final_answerはGemini鬼軍曹版のまま使用
+                            else:
+                                grok_review_status = "success"
                                 # Grok使用時は、モデル名を明示し、2段構成で表示
                                 final_answer = (
                                     f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
@@ -1929,8 +1942,6 @@ function copyToClipboard(elementId) {{
                                     f"{grok_answer}"
                                 )
                                 status_container.write("✓ Grok最終レビュー完了")
-                            except Exception as e:
-                                status_container.write(f"⚠ Grokレビューエラー: {e}")
                         else:
                             # Geminiのみの場合もモデル名を表示（多層モードの場合）
                             if mode_category == "🎯 回答モード(多層)":
@@ -2072,7 +2083,10 @@ function copyToClipboard(elementId) {{
                 if enable_strict:
                     processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
                     if use_grok_reviewer:
-                        processing_history.append("**Phase 3b**: Grok 最終レビュー")
+                        if grok_review_status == "success":
+                            processing_history.append("**Phase 3b**: Grok 最終レビュー ✓")
+                        else:
+                            processing_history.append("**Phase 3b**: Grok 最終レビュー ⚠️ エラー")
                 
                 # 処理履歴を最終回答に追加
                 final_answer_with_history = (
