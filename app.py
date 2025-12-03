@@ -151,7 +151,7 @@ def compact_newlines(text: str) -> str:
 
 def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple:
     """
-    research_textから事実とリスクを分離抽出
+    research_textから事実とリスクをJSON形式で抽出
     
     Args:
         client: Vertex AI client
@@ -159,25 +159,36 @@ def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple:
         research_text: 調査結果テキスト
     
     Returns:
-        (fact_summary, risk_summary): 事実とリスクの要約
+        (fact_summary, risk_summary, usage_dict): 事実、リスク、usage情報
     """
     extraction_prompt = f"""以下の調査結果から、事実とリスクを分離してください。
 
 【調査結果】
 {research_text[:8000]}
 
-【出力形式】
-## 事実（Facts）
-- 確認された情報のみを箇条書き（5-10項目）
-- 日付、数値、引用元を含める
+【出力形式（厳守）】
+以下のJSON形式で出力してください：
+{{
+  "facts": [
+    "確認された事実1（日付・数値・引用元を含む）",
+    "確認された事実2",
+    ...（5-10項目）
+  ],
+  "risks": [
+    "リスク・不確実性1（簡潔に）",
+    "リスク・不確実性2",
+    ...（3-7項目）
+  ],
+  "unknowns": [
+    "情報が不足している点（ある場合のみ）"
+  ]
+}}
 
-## リスク・不確実性（Risks）
-- 不明な点、懸念事項を箇条書き（3-7項目）
-- 各項目は簡潔に"""
+JSONのみを出力し、マークダウンや説明文を含めないでください。"""
     
     config = types.GenerateContentConfig(
-        temperature=0.2,  # 低温で正確に
-        system_instruction="事実とリスクを正確に分離する専門家として振る舞ってください。連続する空行は1行までにしてください。"
+        temperature=0.2,
+        system_instruction="事実とリスクを正確に分離し、JSON形式で出力する専門家として振る舞ってください。"
     )
     
     try:
@@ -188,22 +199,53 @@ def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple:
         )
         text = extract_text_from_response(response).strip()
         
-        # 事実とリスクを分離
-        if "## リスク" in text or "## Risks" in text:
-            parts = text.split("##")
-            fact_summary = parts[1] if len(parts) > 1 else text[:len(text)//2]
-            risk_summary = parts[2] if len(parts) > 2 else text[len(text)//2:]
-        else:
-            # 分離できない場合は半分に
-            mid = len(text) // 2
-            fact_summary = text[:mid]
-            risk_summary = text[mid:]
+        # usage情報を取得
+        usage_dict = {
+            "prompt_tokens": response.usage_metadata.prompt_token_count or 0,
+            "output_tokens": response.usage_metadata.candidates_token_count or 0,
+        } if response.usage_metadata else {"prompt_tokens": 0, "output_tokens": 0}
         
-        return fact_summary.strip(), risk_summary.strip()
+        # JSONパースを試みる
+        import json
+        import re
+        
+        # コードブロックを除去（```json ... ```）
+        json_text = re.sub(r'```json\s*|\s*```', '', text)
+        
+        try:
+            data = json.loads(json_text)
+            facts = data.get("facts", [])
+            risks = data.get("risks", [])
+            unknowns = data.get("unknowns", [])
+            
+            # 事実の整形
+            fact_summary = "## 📊 事実\n" + "\n".join([f"- {f}" for f in facts])
+            if unknowns:
+                fact_summary += "\n\n### 不明点\n" + "\n".join([f"- {u}" for u in unknowns])
+            
+            # リスクの整形
+            risk_summary = "## ⚠️ リスク・不確実性\n" + "\n".join([f"- {r}" for r in risks])
+            
+            return fact_summary, risk_summary, usage_dict
+            
+        except json.JSONDecodeError:
+            # JSONパース失敗時はMarkdownフォールバック
+            if "##" in text:
+                parts = text.split("##")
+                fact_summary = parts[1] if len(parts) > 1 else text[:len(text)//2]
+                risk_summary = parts[2] if len(parts) > 2 else text[len(text)//2:]
+            else:
+                mid = len(text) // 2
+                fact_summary = text[:mid]
+                risk_summary = text[mid:]
+            
+            return fact_summary.strip(), risk_summary.strip(), usage_dict
+            
     except Exception as e:
-        # エラー時は元のテキストを返す
+        # エラー時は元のテキストを半分に分割
         mid = len(research_text) // 2
-        return research_text[:mid], research_text[mid:]
+        return research_text[:mid], research_text[mid:], {"prompt_tokens": 0, "output_tokens": 0}
+
 
 def build_session_memory(sessions: list, current_session_id: str, max_entries: int = 10) -> str:
     """
@@ -1720,21 +1762,23 @@ function copyToClipboard(elementId) {{
                     risk_summary = ""
                     if enable_meta:  # ms/Azモードのみ
                         status_container.write("Phase 1.3: 事実・リスク抽出中...")
-                        fact_summary, risk_summary = extract_facts_and_risks(
+                        fact_summary, risk_summary, phase13_usage = extract_facts_and_risks(
                             client, model_id, research_text
                         )
                         status_container.write("✓ Phase 1.3完了")
                         with status_container.expander("抽出された事実とリスク", expanded=False):
-                            st.markdown(f"### 📊 事実\n{fact_summary}\n\n### ⚠️ リスク\n{risk_summary}")
+                            st.markdown(f"{fact_summary}\n\n{risk_summary}")
                         
-                        # コスト計算 (Phase 1.3)
-                        # extract_facts_and_risksは内部でAPIコールするため、レスポンスが返れば計算可能
-                        # 簡易実装として、おおよそのトークン数を推定
-                        estimated_input = len(research_text[:8000]) // 4
-                        estimated_output = (len(fact_summary) + len(risk_summary)) // 4
-                        phase13_cost = calculate_cost(model_id, estimated_input, estimated_output)
+                        # コスト計算 (Phase 1.3) - usage_dictを使用して正確に
+                        phase13_cost = calculate_cost(
+                            model_id,
+                            phase13_usage["prompt_tokens"],
+                            phase13_usage["output_tokens"]
+                        )
                         st.session_state.session_cost += phase13_cost
                         usage_stats["total_cost_usd"] += phase13_cost
+                        usage_stats["total_input_tokens"] += phase13_usage["prompt_tokens"]
+                        usage_stats["total_output_tokens"] += phase13_usage["output_tokens"]
 
                     
                     # --- Phase 1.5: メタ質問エージェント ---
@@ -1956,11 +2000,19 @@ function copyToClipboard(elementId) {{
    - この推奨をひっくり返す条件
 
 7. 🎯 自信度と引き継ぎ
-   - **自信度**: High / Medium / Low のいずれかを明示
+   - **自信度は次の形式で1行で書いてください**: 
+     * 自信度: High
+     * 自信度: Medium  
+     * 自信度: Low
    - **自信が Medium または Low の場合**:
      * 追加で調べるべきデータ
      * 人間に確認してほしいポイント
      * GPT-5.1（Antigravity）に投げるなら何を聞くべきか
+
+**Facts優先の原則**:
+- 「調査メモ」よりも、「📊 事実」セクションに書かれた内容を優先すること
+- Factsに反することを書く場合は、必ず「仮説」「推測」と明記すること
+- 「⚠️ リスク」に書かれた不確実性は、リスクセクションに必ず反映すること
 
 **重要 - 現在は{current_date}です**:
 - **調査メモに含まれる日付・事実を、あなたの学習データよりも絶対的に優先してください**
