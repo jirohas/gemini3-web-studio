@@ -1289,13 +1289,31 @@ with st.sidebar:
     }
     
     /* 💡おすすめエリアだけは折り返し＆改行を許可 */
-    section[data-testid="stSidebar"] .recommendation-text,
-    section[data-testid="stSidebar"] .recommendation-text p {
+    section[data-testid="stSidebar"] .recommendation-text {
         white-space: pre-wrap !important;
         overflow: visible !important;
         text-overflow: clip !important;
-        line-height: 1.4;
-        font-size: 11px;
+        line-height: 1.2;
+        font-size: 13px;
+    }
+    
+    section[data-testid="stSidebar"] .recommendation-text p {
+        margin-bottom: 0.3rem !important;
+        margin-top: 0.3rem !important;
+    }
+    
+    section[data-testid="stSidebar"] .recommendation-text h2 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.3rem !important;
+    }
+    
+    section[data-testid="stSidebar"] .recommendation-text h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-top: 0.4rem !important;
+        margin-bottom: 0.2rem !important;
     }
     /* 区切り線 */
     hr {
