@@ -15,6 +15,7 @@ load_dotenv()
 USAGE_FILE = "usage_stats.json"
 SESSIONS_FILE = "chat_sessions.json"
 MANUAL_COST_FILE = "manual_cost.json"
+USER_PROFILE_FILE = "user_profile.json"
 USD_TO_JPY = float(os.getenv("USD_TO_JPY", "150.0"))
 MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "100.0"))
 MAX_BUDGET_JPY = MAX_BUDGET_USD * USD_TO_JPY
@@ -179,3 +180,155 @@ def get_client():
         project=VERTEX_PROJECT,
         location=VERTEX_LOCATION,
     )
+
+# =========================
+# User Profile Management
+# =========================
+
+def load_user_profile():
+    """
+    ユーザープロファイルを読み込み
+    
+    Returns:
+        dict: ユーザープロファイル情報
+    """
+    if os.path.exists(USER_PROFILE_FILE):
+        with open(USER_PROFILE_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return get_default_profile()
+    return get_default_profile()
+
+def get_default_profile():
+    """デフォルトのユーザープロファイルを返す"""
+    return {
+        "preferences": {},
+        "interests": [],
+        "facts_about_user": [],
+        "next_suggestions": [],
+        "last_updated": datetime.datetime.now().isoformat()
+    }
+
+def save_user_profile(profile):
+    """
+    ユーザープロファイルを保存
+    
+    Args:
+        profile (dict): 保存するプロファイル情報
+    """
+    profile["last_updated"] = datetime.datetime.now().isoformat()
+    with open(USER_PROFILE_FILE, "w", encoding="utf-8") as f:
+        json.dump(profile, f, indent=4, ensure_ascii=False)
+
+def update_user_profile_from_conversation(client, question, answer, current_profile=None):
+    """
+    会話から自動的にプロファイルを更新
+    
+    Args:
+        client: Vertex AI client
+        question (str): ユーザーの質問
+        answer (str): AIの回答
+        current_profile (dict): 現在のプロファイル (Noneの場合は読み込む)
+    
+    Returns:
+        tuple: (updated_profile, usage_dict)
+    """
+    if current_profile is None:
+        current_profile = load_user_profile()
+    
+    # プロンプト設計: 会話からプロファイルを抽出・更新
+    system_prompt = """あなたはユーザーの会話履歴から、プロファイル情報を抽出・更新するアシスタントです。
+
+【タスク】
+ユーザーの質問とAIの回答を分析し、以下の情報を抽出してください:
+1. preferences: ユーザーの好み・要望 (例: "ニュースの元ネタまで確認したい", "タイムライン構造が好き")
+2. interests: ユーザーの興味・関心トピック (例: "マクロ経済", "AI投資")
+3. facts_about_user: ユーザーに関する事実 (例: "投資経験あり", "技術的なバックグラウンド")
+
+【重要な制約】
+- 既存のプロファイルと重複しない新情報のみ追加
+- 推測ではなく、会話から明確に読み取れることだけを抽出
+- 空の配列を返すのもOK (新情報がない場合)
+- 出力はJSON形式で、以下の形式に従う:
+
+{
+  "new_preferences": {"キー": "値", ...},
+  "new_interests": ["トピック1", "トピック2", ...],
+  "new_facts": ["事実1", "事実2", ...]
+}
+"""
+    
+    # 現在のプロファイルを文字列化
+    current_profile_str = json.dumps(current_profile, ensure_ascii=False, indent=2)
+    
+    user_content = f"""【現在のプロファイル】
+{current_profile_str}
+
+【今回の会話】
+ユーザーの質問: {question[:500]}...
+
+AIの回答: {answer[:800]}...
+
+上記の会話から、新しく追加すべきプロファイル情報を抽出してください。"""
+    
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.3,  # 安定した抽出のため低めに設定
+                max_output_tokens=1000,
+            )
+        )
+        
+        # 使用量情報の取得
+        usage_metadata = response.usage_metadata
+        usage_dict = {
+            "input_tokens": usage_metadata.prompt_token_count if usage_metadata else 0,
+            "output_tokens": usage_metadata.candidates_token_count if usage_metadata else 0,
+        }
+        
+        # レスポンスからJSON抽出
+        result_text = extract_text_from_response(response)
+        
+        # JSONブロックの抽出 (```json ... ``` または直接JSON)
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', result_text, re.DOTALL)
+        if json_match:
+            extracted_data = json.loads(json_match.group(1))
+        else:
+            # ```なしの直接JSON
+            json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+            if json_match:
+                extracted_data = json.loads(json_match.group(0))
+            else:
+                # パースできない場合はデフォルト
+                extracted_data = {"new_preferences": {}, "new_interests": [], "new_facts": []}
+        
+        # プロファイルを更新
+        updated_profile = current_profile.copy()
+        
+        # preferencesのマージ
+        if "new_preferences" in extracted_data:
+            updated_profile["preferences"].update(extracted_data["new_preferences"])
+        
+        # interestsの追加 (重複排除)
+        if "new_interests" in extracted_data:
+            for interest in extracted_data["new_interests"]:
+                if interest not in updated_profile["interests"]:
+                    updated_profile["interests"].append(interest)
+        
+        # factsの追加 (重複排除)
+        if "new_facts" in extracted_data:
+            for fact in extracted_data["new_facts"]:
+                if fact not in updated_profile["facts_about_user"]:
+                    updated_profile["facts_about_user"].append(fact)
+        
+        return (updated_profile, usage_dict)
+        
+    except Exception as e:
+        # エラー時は元のプロファイルをそのまま返す
+        print(f"Profile update error: {e}")
+        return (current_profile, {"input_tokens": 0, "output_tokens": 0})
