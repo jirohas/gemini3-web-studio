@@ -1181,10 +1181,20 @@ with st.sidebar:
     
     # ▼▼▼ Debug: API Key Status ▼▼▼
     with st.expander("🔍 API Status (Debug)", expanded=False):
-        st.caption(f"AWS: {'✅' if (AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_ID.strip()) else '❌'}")
-        st.caption(f"OpenRouter: {'✅' if (OPENROUTER_API_KEY and OPENROUTER_API_KEY.strip()) else '❌'}")
-        st.caption(f"GitHub: {'✅' if (GITHUB_TOKEN and GITHUB_TOKEN.strip()) else '❌'}")
-        # Puterは非表示（セキュリティ上の理由）
+        # 詳細デバッグ情報
+        aws_ok = bool(AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_ID.strip())
+        openrouter_ok = bool(OPENROUTER_API_KEY and OPENROUTER_API_KEY.strip())
+        github_ok = bool(GITHUB_TOKEN and GITHUB_TOKEN.strip())
+        
+        st.caption(f"AWS: {'✅' if aws_ok else '❌'} (len: {len(AWS_ACCESS_KEY_ID) if AWS_ACCESS_KEY_ID else 0})")
+        st.caption(f"OpenRouter: {'✅' if openrouter_ok else '❌'} (len: {len(OPENROUTER_API_KEY) if OPENROUTER_API_KEY else 0})")
+        st.caption(f"GitHub: {'✅' if github_ok else '❌'} (len: {len(GITHUB_TOKEN) if GITHUB_TOKEN else 0})")
+        
+        # 環境変数ソースの確認
+        st.caption(f"Secrets available: {'AWS_ACCESS_KEY_ID' in st.secrets}")
+        st.caption(f"OS env AWS: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
+        st.caption(f"OS env OPENROUTER: {bool(os.getenv('OPENROUTER_API_KEY'))}")
+        st.caption(f"OS env GITHUB: {bool(os.getenv('GITHUB_TOKEN'))}")
     # ▲▲▲ Debug ▲▲▲
 
     st.markdown("---")
