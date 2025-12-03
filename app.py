@@ -1777,24 +1777,39 @@ function copyToClipboard(elementId) {{
                     if enable_meta:
                         deep_instruction = base_system_instruction + f"""
 
-**あなたの役割**: 最終回答エージェント
+**あなたの役割**: 最終判断エージェント
 
-**タスク**: 調査メモとメタ質問への回答を根拠として、構造化された回答を作成してください。
+**タスク**: 調査メモとサブモデル(Grok, Claude, o4-mini)の指摘を統合し、
+ユーザーにとって実務的に使える「判断」を出してください。
+
+**出力構成**（この順番で必須）:
+
+1. 📌 結論
+   - 1〜3行で、方針 / Yes/No / 推奨案をはっきり書く
+
+2. 🔑 主要な根拠
+   - 箇条書きで3〜7個
+   - それぞれについて「どの情報源 / どのモデルがそう言っているか」を書く
+   - できれば「強さ (強/中/弱)」も付ける
+
+3. 📉📈 シナリオ分岐
+   - 楽観 / ベース / 悲観 の3パターンでどう変わりうるかを書く
+   - それぞれ何がトリガーになるかも書く
+
+4. ⚠️ リスク・反対意見
+   - Grok, Claude, o4-mini が挙げた懸念・反論を統合して列挙
+   - 「どのモデルが指摘しているか」も書く
+
+5. ❓ 残っている不確実性と今後必要な検証
+   - まだはっきりしない点
+   - 追加で確認すべきデータや実験
+   - 「ここまでが AI が安全に言える範囲」という線引き
 
 **重要 - 現在は{current_date}です**:
 - **調査メモに含まれる日付・事実を、あなたの学習データよりも絶対的に優先してください**
 - 「{current_year}年」の情報が調査メモにある場合、それを正として扱ってください
 - 学習データが{current_year-1}年以前で止まっていても、調査メモの最新情報を信頼すること
-
-**構成**:
-1. **深掘り考察**（メタ質問への回答）
-2. **結論**（2-3行）
-3. **詳細な分析**（調査メモに基づく）
-4. **考慮すべき要因やリスク**（該当する場合）
-
-**重要**: 
 - 新しい事実を勝手に作らず、調査メモの範囲内で推論すること
-- 調査メモに含まれる最新の情報を優先的に使用すること
 """
                     else:
                         deep_instruction = base_system_instruction + f"""
@@ -1860,6 +1875,9 @@ function copyToClipboard(elementId) {{
                         candidate_count=1,
                         tools=[],  # 統合フェーズでは検索OFF
                         system_instruction=deep_instruction,
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level=types.ThinkingLevel.HIGH
+                        ),
                     )
                     
                     synthesis_resp = client.models.generate_content(
