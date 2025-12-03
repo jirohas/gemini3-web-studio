@@ -2365,10 +2365,7 @@ function copyToClipboard(elementId) {{
                 elif grok_status == "error":
                     processing_history.append("**Phase 1.5b**: Grok 独立思考 ⚠️ エラー")
                 
-                if claude_status == "success":
-                    processing_history.append("**Phase 1.5c**: Claude Opus 4.5 独立思考 (via Puter) ✓")
-                elif claude_status == "error":
-                    processing_history.append("**Phase 1.5c**: Claude Opus 4.5 独立思考 ⚠️ エラー")
+                # Phase 1.5c (Puter) は廃止
                 
                 
                 if claude45_status == "success":
