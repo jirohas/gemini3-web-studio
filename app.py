@@ -1550,7 +1550,13 @@ st.markdown("""
 
 
 
-client = get_client()
+# Vertex AIクライアント初期化（エラー時も続行）
+try:
+    client = get_client()
+except Exception as e:
+    st.error(f"⚠️ Vertex AI初期化エラー: {str(e)}")
+    st.info("💡 Streamlit Cloudの「Manage app」→「Settings」→「Secrets」で`GOOGLE_CREDENTIALS`を確認してください。")
+    client = None
 
 # ---- 履歴表示 ----
 
