@@ -332,3 +332,45 @@ AIの回答: {answer[:800]}...
         # エラー時は元のプロファイルをそのまま返す
         print(f"Profile update error: {e}")
         return (current_profile, {"input_tokens": 0, "output_tokens": 0})
+        return (current_profile, {"input_tokens": 0, "output_tokens": 0})
+
+def build_full_session_memory(sessions: list, current_session_id: str) -> str:
+    """
+    全セッションの履歴をテキスト化（Level 3用）
+    
+    Args:
+        sessions: すべてのセッション
+        current_session_id: 現在のセッションID
+    
+    Returns:
+        str: 全履歴テキスト
+    """
+    # 現在のセッションを除外
+    past_sessions = [s for s in sessions if s["id"] != current_session_id]
+    
+    if not past_sessions:
+        return "（過去の履歴はありません）"
+    
+    # 時系列順（古い順）に並べ替え
+    # timestampはISOフォーマットなので文字列比較でOK
+    past_sessions.sort(key=lambda s: s.get("timestamp", ""), reverse=False)
+    
+    full_text = "【全チャット履歴アーカイブ】\n\n"
+    
+    for session in past_sessions:
+        title = session.get("title", "No Title")
+        date = session.get("timestamp", "")[:10]
+        full_text += f"### Session: {title} ({date})\n"
+        
+        # 各セッションの要約的なものを抽出（全部は長すぎる場合があるが、Level 3ならある程度入れる）
+        # ここでは「ユーザー質問」と「AI回答の冒頭」に絞るか、トークン許容なら全部入れる
+        # gemini-2.0-flashは100万トークンいけるので、思い切って全部入れる
+        for msg in session.get("messages", []):
+            role = "User" if msg["role"] == "user" else "AI"
+            content = msg["content"]
+            # 極端に長いBase64画像などは除外すべきだが、テキスト前提
+            full_text += f"- **{role}**: {content[:2000]}\n" # 1メッセージ2000文字制限で安全性確保
+        
+        full_text += "\n"
+        
+    return full_text
