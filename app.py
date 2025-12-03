@@ -344,15 +344,13 @@ def generate_recommendations(client, sessions, current_session_id, user_profile,
 - 3〜5個の具体的な質問を提案
 - 各質問には「なぜこれが良いか」の理由を簡潔に付ける
 - 過去の会話との繋がりを明示
-- 出力は以下のMarkdown形式で:
+- 出力は以下のMarkdown形式で（サイドバーで見やすいように）:
 
-### 🔁 次に試せる質問候補
+**Q1. [質問タイトル]**
+(理由: [理由])
 
-1. **[質問タイトル]**  
-   [理由: なぜこの質問が良いか]
-
-2. **[質問タイトル]**  
-   [理由]
+**Q2. [質問タイトル]**
+(理由: [理由])
 
 ...
 """
@@ -1067,9 +1065,9 @@ with st.sidebar:
     
     # ---- おすすめ ----
     with st.expander("💡 おすすめ", expanded=False):
-        # ボタンを縦に配置して見切れを防止
-        if st.button("✨ 提案を生成 (直近のみ)", use_container_width=True):
-            with st.spinner("あなたへのおすすめを生成中..."):
+        # ボタンを縦に配置
+        if st.button("✨ 提案 (直近)", use_container_width=True):
+            with st.spinner("生成中..."):
                 client = get_client()
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
@@ -1084,12 +1082,12 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                st.markdown(rec_text)
+                st.session_state.recommendation_text = rec_text
         
-        st.markdown("") # 少し隙間を空ける
+        st.markdown("") # 隙間
 
-        if st.button("🔥 本気の提案 (全履歴)", use_container_width=True):
-            with st.spinner("全履歴を分析して本気の提案を生成中..."):
+        if st.button("🔥 提案 (全履歴)", use_container_width=True):
+            with st.spinner("全履歴分析中..."):
                 client = get_client()
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
@@ -1104,7 +1102,12 @@ with st.sidebar:
                 usage_stats["total_output_tokens"] += usage["output_tokens"]
                 save_usage(usage_stats)
                 
-                st.markdown(rec_text)
+                st.session_state.recommendation_text = rec_text
+
+        # 結果表示 (ボタンの下に表示)
+        if "recommendation_text" in st.session_state:
+            st.markdown("---")
+            st.markdown(st.session_state.recommendation_text)
 
     # ---- 設定 (モデルなど) ----
     with st.expander("⚙️ 設定", expanded=False):
