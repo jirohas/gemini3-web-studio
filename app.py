@@ -1288,7 +1288,31 @@ if prompt:
     else:
         # ---- ユーザー発言表示 ----
         with st.chat_message("user"):
-            st.markdown(prompt)
+            # コピーボタン付きメッセージ表示
+            import html
+            escaped_prompt = html.escape(prompt)
+            message_id = f"user_msg_{len(messages)}"
+            
+            st.markdown(f"""
+<div style="position: relative;">
+    <div id="{message_id}" style="padding-right: 40px;">{escaped_prompt}</div>
+    <button onclick="copyToClipboard('{message_id}')" style="position: absolute; right: 0; top: 0; background: transparent; border: 1px solid #444; border-radius: 4px; cursor: pointer; padding: 4px 8px; color: #aaa; font-size: 12px;" title="コピー">
+        📋
+    </button>
+</div>
+<script>
+function copyToClipboard(elementId) {{
+    const element = document.getElementById(elementId);
+    const text = element.innerText;
+    navigator.clipboard.writeText(text).then(() => {{
+        // コピー成功フィードバック
+        const button = event.target;
+        button.textContent = '✓';
+        setTimeout(() => {{ button.textContent = '📋'; }}, 1000);
+    }});
+}}
+</script>
+""", unsafe_allow_html=True)
             if uploaded_files:
                 for uf in uploaded_files:
                     st.caption(f"📎 添付: {uf.name}")
@@ -2049,7 +2073,30 @@ if prompt:
                     + final_answer
                 )
                 
-                st.markdown(final_answer_with_history)
+                # コピーボタン付き回答表示
+                import html
+                escaped_answer = html.escape(final_answer_with_history)
+                answer_id = f"assistant_msg_{len(messages)}"
+                
+                st.markdown(f"""
+<div style="position: relative;">
+    <div id="{answer_id}" style="padding-right: 40px; white-space: pre-wrap;">{escaped_answer}</div>
+    <button onclick="copyToClipboard('{answer_id}')" style="position: absolute; right: 0; top: 0; background: transparent; border: 1px solid #444; border-radius: 4px; cursor: pointer; padding: 4px 8px; color: #aaa; font-size: 12px;" title="コピー">
+        📋
+    </button>
+</div>
+<script>
+function copyToClipboard(elementId) {{
+    const element = document.getElementById(elementId);
+    const text = element.innerText;
+    navigator.clipboard.writeText(text).then(() => {{
+        const button = event.target;
+        button.textContent = '✓';
+        setTimeout(() => {{ button.textContent = '📋'; }}, 1000);
+    }});
+}}
+</script>
+""", unsafe_allow_html=True)
                 
                 # ▼▼▼ コストサマリー表示 ▼▼▼
                 st.markdown("---")
