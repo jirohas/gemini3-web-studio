@@ -1762,6 +1762,12 @@ function copyToClipboard(elementId) {{
                         config=research_config,
                     )
                     
+                    # TODO: Agentic Loop (Deep Research)
+                    # - 検索結果の不確実性が高い場合、while ループで自律的に再検索
+                    # - 最大ループ回数のガード（例: max_loops=3）
+                    # - 1ターンあたりの最大コスト制限
+                    # - 実装優先度: 中（実運用で「ここで再検索してほしい」という痛みが見えてから）
+                    
                     research_text = extract_text_from_response(research_resp)
                     
                     # リサーチフェーズのグラウンディング情報を保存
