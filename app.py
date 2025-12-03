@@ -13,7 +13,8 @@ from logic import (
     load_usage, save_usage, calculate_cost, get_mime_type,
     extract_youtube_id, get_youtube_transcript, get_relevant_context,
     extract_text_from_response, load_sessions, save_sessions, get_client,
-    load_user_profile, save_user_profile, update_user_profile_from_conversation
+    load_user_profile, save_user_profile, update_user_profile_from_conversation,
+    build_full_session_memory
 )
 
 try:
@@ -297,7 +298,7 @@ def build_session_memory(sessions: list, current_session_id: str, max_entries: i
     return memory_text
 
 
-def generate_recommendations(client, sessions, current_session_id, user_profile):
+def generate_recommendations(client, sessions, current_session_id, user_profile, mode="normal"):
     """
     ユーザープロファイルと過去セッションから次の質問候補を生成
     
@@ -306,13 +307,26 @@ def generate_recommendations(client, sessions, current_session_id, user_profile)
         sessions: 全セッション
         current_session_id: 現在のセッションID
         user_profile: ユーザープロファイル
+        mode: "normal" (直近5件) or "deep" (全履歴)
     
     Returns:
         tuple: (recommendations_text, usage_dict)
     """
-    # 過去セッションのサマリー取得
-    session_memory = build_session_memory(sessions, current_session_id, max_entries=5)
-    
+    if mode == "deep":
+        # Level 3: 全履歴 × gemini-2.0-flash
+        session_memory = build_full_session_memory(sessions, current_session_id)
+        model_name = "gemini-2.0-flash"
+        max_tokens = 3000
+        role_desc = "あなたはユーザーの全チャット履歴を熟知した専属の戦略アドバイザーです。"
+        task_desc = "これまでの全議論を俯瞰し、ユーザーがまだ気づいていない本質的な課題や、次に深掘りすべき戦略的なテーマを提案してください。"
+    else:
+        # Level 2: 直近5件 × gemini-2.5-flash
+        session_memory = build_session_memory(sessions, current_session_id, max_entries=5)
+        model_name = "gemini-2.5-flash"
+        max_tokens = 1500
+        role_desc = "あなたはユーザーの過去の会話履歴とプロファイルを分析して、次に聞くと良い質問を提案するアシスタントです。"
+        task_desc = "ユーザーの興味・関心に基づき、次に聞くと良い質問を3〜5個提案してください。"
+
     # プロファイル情報の整形
     interests_str = ", ".join(user_profile.get("interests", [])) if user_profile.get("interests") else "まだ特定されていません"
     facts_str = "\n".join([f"- {fact}" for fact in user_profile.get("facts_about_user", [])]) if user_profile.get("facts_about_user", []) else "まだ蓄積されていません"
@@ -323,8 +337,7 @@ def generate_recommendations(client, sessions, current_session_id, user_profile)
     else:
         prefs_str = "まだ設定されていません"
     
-    system_prompt = """あなたはユーザーの過去の会話履歴とプロファイルを分析して、
-次に聞くと良い質問を提案するアシスタントです。
+    system_prompt = f"""{role_desc}
 
 【重要な制約】
 - ユーザーの興味・好み・過去の文脈を最大限活用
@@ -358,17 +371,17 @@ def generate_recommendations(client, sessions, current_session_id, user_profile)
 
 ---
 
-上記を踏まえて、このユーザーが次に聞くと良い質問を3〜5個提案してください。"""
+{task_desc}"""
     
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model_name,
             contents=[
                 {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}
             ],
             config=types.GenerateContentConfig(
-                temperature=0.7,  # 多様性のため少し高めに
-                max_output_tokens=1500,
+                temperature=0.7,
+                max_output_tokens=max_tokens,
             )
         )
         
@@ -1054,23 +1067,44 @@ with st.sidebar:
     
     # ---- おすすめ ----
     with st.expander("💡 おすすめ", expanded=False):
-        if st.button("✨ 提案を生成", use_container_width=True):
-            with st.spinner("あなたへのおすすめを生成中..."):
-                client = get_client()
-                user_profile = load_user_profile()
-                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile)
-                
-                # コスト加算
-                cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
-                st.session_state.session_cost += cost
-                
-                # グローバル使用量の更新
-                usage_stats["total_cost_usd"] += cost
-                usage_stats["total_input_tokens"] += usage["input_tokens"]
-                usage_stats["total_output_tokens"] += usage["output_tokens"]
-                save_usage(usage_stats)
-                
-                st.markdown(rec_text)
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✨ 提案を生成", use_container_width=True):
+                with st.spinner("あなたへのおすすめを生成中..."):
+                    client = get_client()
+                    user_profile = load_user_profile()
+                    rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
+                    
+                    # コスト加算
+                    cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
+                    st.session_state.session_cost += cost
+                    
+                    # グローバル使用量の更新
+                    usage_stats["total_cost_usd"] += cost
+                    usage_stats["total_input_tokens"] += usage["input_tokens"]
+                    usage_stats["total_output_tokens"] += usage["output_tokens"]
+                    save_usage(usage_stats)
+                    
+                    st.markdown(rec_text)
+        
+        with col2:
+            if st.button("🔥 本気の提案 (全履歴)", use_container_width=True):
+                with st.spinner("全履歴を分析して本気の提案を生成中..."):
+                    client = get_client()
+                    user_profile = load_user_profile()
+                    rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
+                    
+                    # コスト加算 (gemini-2.0-flash)
+                    cost = calculate_cost("gemini-2.0-flash", usage["input_tokens"], usage["output_tokens"])
+                    st.session_state.session_cost += cost
+                    
+                    # グローバル使用量の更新
+                    usage_stats["total_cost_usd"] += cost
+                    usage_stats["total_input_tokens"] += usage["input_tokens"]
+                    usage_stats["total_output_tokens"] += usage["output_tokens"]
+                    save_usage(usage_stats)
+                    
+                    st.markdown(rec_text)
 
     # ---- 設定 (モデルなど) ----
     with st.expander("⚙️ 設定", expanded=False):
@@ -2442,27 +2476,62 @@ function copyToClipboard(elementId) {{
 
                 save_usage(usage_stats)
 
-                # --- ユーザープロファイルの自動更新 ---
+                # --- ユーザープロファイルの自動更新 & 自動提案 ---
                 try:
                     status_container.write("ユーザープロファイルを更新中...")
-                    # クライアント再取得 (念のため)
-                    client_for_profile = get_client()
+                    client_for_extras = get_client()
+                    
+                    # プロファイル更新
                     updated_profile, profile_usage = update_user_profile_from_conversation(
-                        client_for_profile, prompt, final_answer
+                        client_for_extras, prompt, final_answer
                     )
                     save_user_profile(updated_profile)
                     
-                    # プロファイル更新コストの加算 (gemini-2.5-flash)
+                    # プロファイル更新コスト
                     p_cost = calculate_cost("gemini-2.5-flash", profile_usage["input_tokens"], profile_usage["output_tokens"])
                     st.session_state.session_cost += p_cost
                     usage_stats["total_cost_usd"] += p_cost
                     usage_stats["total_input_tokens"] += profile_usage["input_tokens"]
                     usage_stats["total_output_tokens"] += profile_usage["output_tokens"]
+                    
+                    # --- 回答末尾への自動提案 (Phase 3-A) ---
+                    status_container.write("次の質問を提案中...")
+                    suggestion_prompt = f"""
+以下の会話の続きとして、ユーザーが次に聞くと有益な質問を3つ提案してください。
+ユーザーのプロファイル（興味関心）: {updated_profile.get('interests', [])}
+
+【直前の会話】
+User: {prompt[:500]}
+AI: {final_answer[:500]}
+
+【制約】
+- 箇条書きで3つ
+- 簡潔に
+- Markdown形式
+"""
+                    suggestion_resp = client_for_extras.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=[{"role": "user", "parts": [{"text": suggestion_prompt}]}],
+                        config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=500)
+                    )
+                    
+                    suggestions_text = extract_text_from_response(suggestion_resp)
+                    
+                    if suggestions_text:
+                        final_answer += "\n\n---\n\n### 🔁 次に試せる質問候補\n" + suggestions_text
+                        
+                        # 提案生成コスト
+                        s_usage = suggestion_resp.usage_metadata
+                        s_cost = calculate_cost("gemini-2.5-flash", s_usage.prompt_token_count, s_usage.candidates_token_count)
+                        st.session_state.session_cost += s_cost
+                        usage_stats["total_cost_usd"] += s_cost
+                        usage_stats["total_input_tokens"] += s_usage.prompt_token_count
+                        usage_stats["total_output_tokens"] += s_usage.candidates_token_count
+                    
                     save_usage(usage_stats)
                     
                 except Exception as e:
-                    # プロファイル更新失敗はメインフローを止めない
-                    print(f"Profile update failed: {e}")
+                    print(f"Profile/Suggestion update failed: {e}")
 
                 status_container.update(label="完了！", state="complete", expanded=False)
 
