@@ -93,7 +93,9 @@ import requests
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
     if "OPENROUTER_API_KEY" in st.secrets:
-        OPENROUTER_API_KEY = str(st.secrets["OPENROUTER_API_KEY"])
+        OPENROUTER_API_KEY = str(st.secrets["OPENROUTER_API_KEY"]).strip()
+        if not OPENROUTER_API_KEY:  # 空文字ならenv変数にフォールバック
+            OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
     else:
         OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 except Exception as e:
@@ -114,8 +116,12 @@ except ImportError:
 # AWS認証情報取得
 try:
     if "AWS_ACCESS_KEY_ID" in st.secrets:
-        AWS_ACCESS_KEY_ID = str(st.secrets["AWS_ACCESS_KEY_ID"])
-        AWS_SECRET_ACCESS_KEY = str(st.secrets["AWS_SECRET_ACCESS_KEY"])
+        AWS_ACCESS_KEY_ID = str(st.secrets["AWS_ACCESS_KEY_ID"]).strip()
+        AWS_SECRET_ACCESS_KEY = str(st.secrets["AWS_SECRET_ACCESS_KEY"]).strip()
+        # 空文字ならenv変数にフォールバック
+        if not AWS_ACCESS_KEY_ID:
+            AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+            AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     else:
         AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
         AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
@@ -132,7 +138,9 @@ CLAUDE_REGION = "us-east-1"
 # ▼▼▼ GitHub Models (o4-mini用) ▼▼▼
 try:
     if "GITHUB_TOKEN" in st.secrets:
-        GITHUB_TOKEN = str(st.secrets["GITHUB_TOKEN"])
+        GITHUB_TOKEN = str(st.secrets["GITHUB_TOKEN"]).strip()
+        if not GITHUB_TOKEN:  # 空文字ならenv変数にフォールバック
+            GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
     else:
         GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 except Exception as e:
@@ -344,15 +352,20 @@ def generate_recommendations(client, sessions, current_session_id, user_profile,
 - 3〜5個の具体的な質問を提案
 - 各質問には「なぜこれが良いか」の理由を簡潔に付ける
 - 過去の会話との繋がりを明示
+- **自然な日本語で文法的に正しい文章を生成すること**
 - 出力は以下のMarkdown形式で（サイドバーで見やすいように）:
 
-**Q1. [質問タイトル]**
-(理由: [理由])
+**Q1. [質問タイトル（自然な日本語の疑問文）]**
+(理由: [なぜこの質問が有益か、簡潔に説明])
 
 **Q2. [質問タイトル]**
 (理由: [理由])
 
 ...
+
+【出力例】
+**Q1. iPhoneの通訳機能は、どのような場面で最も役立つと思いますか？**
+(理由: 過去の会話でiPhoneの通訳機能に関心を示されていたため、具体的な利用シーンを深掘りすることで実用性を確認できます)
 """
     
     user_content = f"""【ユーザープロファイル】
