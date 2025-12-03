@@ -996,7 +996,8 @@ with st.sidebar:
     st.subheader("💰 Cost")
     st.caption(f"予算: ¥{MAX_BUDGET_JPY:,.0f}")
     st.caption(f"上限: ¥{TRIAL_LIMIT_JPY:,.0f}")
-    st.caption(f"有効期限: {TRIAL_EXPIRY}")
+    st.caption(f"有効期限 (GCP): {TRIAL_EXPIRY}")
+    st.caption("🆓 AWS Free Tier: Jun 02, 2026")
     
     # 手動コスト入力（永続化）
     current_manual_cost = load_manual_cost()
