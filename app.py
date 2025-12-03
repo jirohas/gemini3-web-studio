@@ -2600,9 +2600,15 @@ User: {prompt[:500]}
 AI: {final_answer[:500]}
 
 【制約】
+- 簡潔な質問文（20〜25文字以内）
 - 箇条書きで3つ
-- 簡潔に
-- Markdown形式
+- Markdown形式（番号付きリスト）
+- 各質問は疑問文で終わる
+
+【出力例】
+1. コスト削減の具体策は？
+2. リスク管理の優先順位は？
+3. 次のアクションプランは？
 """
                     suggestion_resp = client_for_extras.models.generate_content(
                         model="gemini-2.5-flash",
