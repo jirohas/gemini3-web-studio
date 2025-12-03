@@ -2243,8 +2243,8 @@ function copyToClipboard(elementId) {{
                     # ▲▲▲ o4-mini 追加ここまで ▲▲▲
                     
                     # 統合指示の修正
-                    if enable_meta and (grok_thought or claude_thought or claude45_thought or o4mini_thought):
-                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude Opus 4.5, Claude 4.5 Sonnet, o4-mini) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                    if enable_meta and (grok_thought or claude45_thought or o4mini_thought):
+                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude 4.5 Sonnet, o4-mini) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
