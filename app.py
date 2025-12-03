@@ -91,10 +91,12 @@ from curl_cffi import requests as crequests  # Puter用
 # OpenRouter API Keyの取得 (st.secrets優先、なければ環境変数)
 try:
     if "OPENROUTER_API_KEY" in st.secrets:
-        OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+        OPENROUTER_API_KEY = str(st.secrets["OPENROUTER_API_KEY"])
     else:
         OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-except:
+except Exception as e:
+    # デバッグ用：エラーを表示
+    # st.error(f"OPENROUTER_API_KEY読み込みエラー: {e}")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # Puter認証情報は削除（AWS Bedrockに移行）
@@ -110,12 +112,13 @@ except ImportError:
 # AWS認証情報取得
 try:
     if "AWS_ACCESS_KEY_ID" in st.secrets:
-        AWS_ACCESS_KEY_ID = st.secrets["AWS_ACCESS_KEY_ID"]
-        AWS_SECRET_ACCESS_KEY = st.secrets["AWS_SECRET_ACCESS_KEY"]
+        AWS_ACCESS_KEY_ID = str(st.secrets["AWS_ACCESS_KEY_ID"])
+        AWS_SECRET_ACCESS_KEY = str(st.secrets["AWS_SECRET_ACCESS_KEY"])
     else:
         AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
         AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-except:
+except Exception as e:
+    # st.error(f"AWS認証情報読み込みエラー: {e}")
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
@@ -127,10 +130,11 @@ CLAUDE_REGION = "us-east-1"
 # ▼▼▼ GitHub Models (o4-mini用) ▼▼▼
 try:
     if "GITHUB_TOKEN" in st.secrets:
-        GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+        GITHUB_TOKEN = str(st.secrets["GITHUB_TOKEN"])
     else:
         GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-except:
+except Exception as e:
+    # st.error(f"GITHUB_TOKEN読み込みエラー: {e}")
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
 GITHUB_MODEL_ID = "o4-mini"
