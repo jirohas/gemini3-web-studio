@@ -174,12 +174,10 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
             f"ユーザーの質問:\n{user_question}\n\n"
             f"調査メモ:\n{research_text}\n\n"
             "指示:\n"
-            "あなたは Gemini とは独立した立場のリード研究者です。\n"
-            "Gemini に遠慮する必要はありません。調査メモの事実を最優先しつつ、\n"
-            "特に『見落とされがちなリスク・反対意見・前提の穴』を指摘してください。\n"
-            "1) あなたなりの結論（短く）\n"
-            "2) Gemini が取りそうな結論との違い\n"
-            "3) 追加で考慮すべきリスクや条件\n"
+            "あなたは別視点のリード研究者です。\n"
+            "・新しい結論を作るよりも、「見落としていそうな論点・リスク・反対意見」を出すことを優先してください。\n"
+            "・3〜7個の箇条書きにまとめてください。各項目は1〜3行以内で簡潔に。\n"
+            "・連続する空行は1行までにしてください。\n"
             f"{x_search_instruction}"
         )
     else:
@@ -187,11 +185,10 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
             f"ユーザーの質問:\n{user_question}\n\n"
             f"調査メモ:\n{research_text}\n\n"
             "指示:\n"
-            "あなたはGeminiとは別の独立したAIです。\n"
-            f"{x_search_instruction}\n"
-            "調査メモを元に、あなた自身の視点で回答案を作成してください。\n"
-            "Geminiの意見に合わせる必要はありません。\n"
-            "特に、調査メモの中で重要だと思う事実や、別の視点があれば強調してください。"
+            "調査メモを元に、「他のモデルが見落としそうな視点・リスク」を3〜5個、箇条書きで出してください。\n"
+            "・フルの回答ではなく、チェックリスト形式で。\n"
+            "・各項目は1〜3行以内で簡潔に。\n"
+            f"{x_search_instruction}"
         )
 
     headers = {
@@ -440,17 +437,19 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
     
     
     system_prompt = (
-        "あなたはGeminiとは独立したAIアドバイザーです。\n"
-        "提供された調査メモを事実のベースとしつつも、推論能力を活かして、\n"
-        "Geminiが見落としがちな『前提の誤り』『隠れたリスク』『別の可能性』を指摘してください。\n"
-        "回答は簡潔に、箇条書きで出力してください。"
+        "あなたは、与えられた要約をもとに「抜けていそうな観点」を列挙するテスター/チェッカーです。\n"
+        "【重要な制約】\n"
+        "・フルの回答は書かないでください。\n"
+        "・「他のモデルが見落としそうなリスク・エッジケース・反論」だけを箇条書きで出してください。\n"
+        "・最大5個まで。各項目は1〜3行以内で簡潔に。\n"
+        "・連続する空行は1行までにしてください。"
     )
     
     user_content = (
         f"ユーザーの質問:\n{user_question}\n\n"
-        f"調査メモ:\n{research_text}\n\n"
+        f"調査メモ（要約版）:\n{research_text}\n\n"
         "指示:\n"
-        "調査メモを元に、あなた自身の視点で回答案を作成してください。"
+        "上記を踏まえ、「見落としそうなリスク・テストケース・反論」を最大5個まで箇条書きで出してください。"
     )
     
     headers = {
@@ -1448,7 +1447,13 @@ function copyToClipboard(elementId) {{
                 enable_research = "β1" not in response_mode
                 enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
                 enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
-                enable_grok_x_search = "grok" in response_mode
+                
+                # Grok X検索はニュース/トレンド系のみ
+                def should_use_x_search(prompt: str) -> bool:
+                    keywords = ["Xで", "Twitter", "ツイッター", "ポスト", "トレンド", "炎上", "バズ", "話題"]
+                    return any(kw in prompt for kw in keywords)
+                
+                enable_grok_x_search = "grok" in response_mode and should_use_x_search(prompt)
 
                 # =========================
                 # 通常モード (高速 / 鬼軍曹)
@@ -1823,7 +1828,7 @@ function copyToClipboard(elementId) {{
                         synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n"
                     
                     if enable_meta and grok_thought:
-                        synthesis_prompt_text += f"==== 別視点からの回答案 (Grok) ====\n{grok_thought}\n==== 別視点ここまで ====\n\n"
+                        synthesis_prompt_text += f"==== 別視点からのリスク指摘 (Grok) ====\n{grok_thought}\n==== Grok ここまで ====\n\n"
                     
                     
                     # ▼▼▼ Claude 4.5 の回答を統合プロンプトに加える ▼▼▼
@@ -1833,7 +1838,7 @@ function copyToClipboard(elementId) {{
                     
                     # ▼▼▼ o4-mini の回答を統合プロンプトに加える ▼▼▼
                     if o4mini_thought and o4mini_status == "success":
-                        synthesis_prompt_text += f"==== 別視点からの回答案 (o4-mini / GitHub Models) ====\n{o4mini_thought}\n==== o4-mini ここまで ====\n\n"
+                        synthesis_prompt_text += f"==== 見落とし/リスクチェック (o4-mini / GitHub Models) ====\n{o4mini_thought}\n==== o4-mini ここまで ====\n\n"
                     # ▲▲▲ o4-mini 追加ここまで ▲▲▲
                     
                     # 統合指示の修正
