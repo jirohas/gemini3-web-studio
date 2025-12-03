@@ -1849,12 +1849,6 @@ function copyToClipboard(elementId) {{
                             usage_stats["total_input_tokens"] += (question_resp.usage_metadata.prompt_token_count or 0)
                             usage_stats["total_output_tokens"] += (question_resp.usage_metadata.candidates_token_count or 0)
 
-                    # 多層+puterモードの鬼軍曹モードかチェック
-                    is_puter_onigunsou = (
-                        mode_category == "β：🎯 回答モード(多層+puter)" and
-                        response_mode == "1. 熟考 + 鬼軍曹(local/セ❎️)"
-                    )
-
                     # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
                     grok_thought = ""
                     grok_status = "skipped"
@@ -1875,10 +1869,6 @@ function copyToClipboard(elementId) {{
                         except Exception as e:
                             grok_status = "error"
                             status_container.write(f"⚠ Grok思考エラー: {e}")
-
-                    # Phase 1.5c: Puterは削除（AWS Bedrockに移行）
-                    claude_thought = ""
-                    claude_status = "skipped"
 
                     # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
                     claude45_thought = ""
