@@ -1194,8 +1194,21 @@ with st.sidebar:
         st.caption(f"OpenRouter: {'✅' if openrouter_ok else '❌'} (len: {len(OPENROUTER_API_KEY) if OPENROUTER_API_KEY else 0})")
         st.caption(f"GitHub: {'✅' if github_ok else '❌'} (len: {len(GITHUB_TOKEN) if GITHUB_TOKEN else 0})")
         
-        # 環境変数ソースの確認
-        st.caption(f"Secrets available: {'AWS_ACCESS_KEY_ID' in st.secrets}")
+        # Secrets詳細デバッグ
+        st.caption("---")
+        try:
+            secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+            st.caption(f"Secrets keys available: {len(secrets_keys)}")
+            if secrets_keys:
+                st.caption(f"Keys: {', '.join([k for k in secrets_keys if not k.startswith('GOOGLE_CREDENTIALS')])}")
+            st.caption(f"AWS in secrets: {'AWS_ACCESS_KEY_ID' in st.secrets}")
+            st.caption(f"OPENROUTER in secrets: {'OPENROUTER_API_KEY' in st.secrets}")
+            st.caption(f"GITHUB in secrets: {'GITHUB_TOKEN' in st.secrets}")
+        except Exception as e:
+            st.caption(f"Secrets check error: {e}")
+        
+        # 環境変数確認
+        st.caption("---")
         st.caption(f"OS env AWS: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
         st.caption(f"OS env OPENROUTER: {bool(os.getenv('OPENROUTER_API_KEY'))}")
         st.caption(f"OS env GITHUB: {bool(os.getenv('GITHUB_TOKEN'))}")
