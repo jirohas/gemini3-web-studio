@@ -91,13 +91,14 @@ import requests
 # curl_cffi は未使用のため削除（Puter廃止に伴い不要）
 import textwrap
 
-def wrap_recommendation_text(text, width=18):
+def wrap_recommendation_text(text, width=20):
     """
     推薦テキストを指定幅で自動改行（サイドバー表示用）
+    見出しや重要な行は保持し、本文のみ改行
     
     Args:
         text: 改行するテキスト
-        width: 1行の最大文字数（デフォルト18文字）
+        width: 1行の最大文字数（デフォルト20文字）
     
     Returns:
         改行処理されたテキスト
@@ -106,8 +107,22 @@ def wrap_recommendation_text(text, width=18):
     wrapped_lines = []
     
     for line in lines:
+        stripped = line.strip()
+        
         # 空行はそのまま保持
-        if not line.strip():
+        if not stripped:
+            wrapped_lines.append(line)
+            continue
+        
+        # 見出し行（#始まり、**囲み、数字.始まり）は改行しない
+        if (stripped.startswith('#') or 
+            stripped.startswith('**') or 
+            (len(stripped) > 2 and stripped[0].isdigit() and stripped[1] == '.')):
+            wrapped_lines.append(line)
+            continue
+        
+        # 短い行（width以下）はそのまま保持
+        if len(stripped) <= width:
             wrapped_lines.append(line)
             continue
         
@@ -115,14 +130,14 @@ def wrap_recommendation_text(text, width=18):
         indent = len(line) - len(line.lstrip())
         indent_str = ' ' * indent
         
-        # 改行処理（長い単語も強制的に改行）
+        # 長い本文のみ改行処理
         wrapped = textwrap.fill(
-            line.strip(), 
+            stripped, 
             width=width,
-            break_long_words=True,  # 長い単語も分割
+            break_long_words=True,
             break_on_hyphens=True,
             initial_indent=indent_str,
-            subsequent_indent=indent_str + '  '  # 継続行は少しインデント
+            subsequent_indent=indent_str + '  '
         )
         wrapped_lines.append(wrapped)
     
