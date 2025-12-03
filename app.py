@@ -1181,9 +1181,9 @@ with st.sidebar:
     
     # ▼▼▼ Debug: API Key Status ▼▼▼
     with st.expander("🔍 API Status (Debug)", expanded=False):
-        st.caption(f"AWS: {'✅' if AWS_ACCESS_KEY_ID else '❌'}")
-        st.caption(f"OpenRouter: {'✅' if OPENROUTER_API_KEY else '❌'}")
-        st.caption(f"GitHub: {'✅' if GITHUB_TOKEN else '❌'}")
+        st.caption(f"AWS: {'✅' if (AWS_ACCESS_KEY_ID and AWS_ACCESS_KEY_ID.strip()) else '❌'}")
+        st.caption(f"OpenRouter: {'✅' if (OPENROUTER_API_KEY and OPENROUTER_API_KEY.strip()) else '❌'}")
+        st.caption(f"GitHub: {'✅' if (GITHUB_TOKEN and GITHUB_TOKEN.strip()) else '❌'}")
         # Puterは非表示（セキュリティ上の理由）
     # ▲▲▲ Debug ▲▲▲
 
