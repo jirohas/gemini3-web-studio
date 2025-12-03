@@ -12,7 +12,8 @@ from logic import (
     VERTEX_PROJECT, VERTEX_LOCATION,
     load_usage, save_usage, calculate_cost, get_mime_type,
     extract_youtube_id, get_youtube_transcript, get_relevant_context,
-    extract_text_from_response, load_sessions, save_sessions, get_client
+    extract_text_from_response, load_sessions, save_sessions, get_client,
+    load_user_profile, save_user_profile, update_user_profile_from_conversation
 )
 
 try:
@@ -294,6 +295,99 @@ def build_session_memory(sessions: list, current_session_id: str, max_entries: i
     memory_text += "\n\n"
     
     return memory_text
+
+
+def generate_recommendations(client, sessions, current_session_id, user_profile):
+    """
+    ユーザープロファイルと過去セッションから次の質問候補を生成
+    
+    Args:
+        client: Vertex AI client
+        sessions: 全セッション
+        current_session_id: 現在のセッションID
+        user_profile: ユーザープロファイル
+    
+    Returns:
+        tuple: (recommendations_text, usage_dict)
+    """
+    # 過去セッションのサマリー取得
+    session_memory = build_session_memory(sessions, current_session_id, max_entries=5)
+    
+    # プロファイル情報の整形
+    interests_str = ", ".join(user_profile.get("interests", [])) if user_profile.get("interests") else "まだ特定されていません"
+    facts_str = "\n".join([f"- {fact}" for fact in user_profile.get("facts_about_user", [])]) if user_profile.get("facts_about_user", []) else "まだ蓄積されていません"
+    
+    prefs_str = ""
+    if user_profile.get("preferences"):
+        prefs_str = "\n".join([f"- {k}: {v}" for k, v in user_profile["preferences"].items()])
+    else:
+        prefs_str = "まだ設定されていません"
+    
+    system_prompt = """あなたはユーザーの過去の会話履歴とプロファイルを分析して、
+次に聞くと良い質問を提案するアシスタントです。
+
+【重要な制約】
+- ユーザーの興味・好み・過去の文脈を最大限活用
+- 3〜5個の具体的な質問を提案
+- 各質問には「なぜこれが良いか」の理由を簡潔に付ける
+- 過去の会話との繋がりを明示
+- 出力は以下のMarkdown形式で:
+
+### 🔁 次に試せる質問候補
+
+1. **[質問タイトル]**  
+   [理由: なぜこの質問が良いか]
+
+2. **[質問タイトル]**  
+   [理由]
+
+...
+"""
+    
+    user_content = f"""【ユーザープロファイル】
+興味・関心: {interests_str}
+
+好み・要望:
+{prefs_str}
+
+ユーザーに関する事実:
+{facts_str}
+
+【過去の会話サマリー】
+{session_memory if session_memory else "（新規ユーザー）"}
+
+---
+
+上記を踏まえて、このユーザーが次に聞くと良い質問を3〜5個提案してください。"""
+    
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                {"role": "user", "parts": [{"text": f"{system_prompt}\n\n{user_content}"}]}
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.7,  # 多様性のため少し高めに
+                max_output_tokens=1500,
+            )
+        )
+        
+        # 使用量情報の取得
+        usage_metadata = response.usage_metadata
+        usage_dict = {
+            "input_tokens": usage_metadata.prompt_token_count if usage_metadata else 0,
+            "output_tokens": usage_metadata.candidates_token_count if usage_metadata else 0,
+        }
+        
+        # レスポンステキストの取得
+        recommendations_text = extract_text_from_response(response)
+        
+        return (recommendations_text, usage_dict)
+        
+    except Exception as e:
+        error_text = f"### ⚠️ エラー\n\n提案生成中にエラーが発生しました: {e}"
+        return (error_text, {"input_tokens": 0, "output_tokens": 0})
+
 
 def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
@@ -958,6 +1052,26 @@ with st.sidebar:
     
     strict_mode = False
     
+    # ---- おすすめ ----
+    with st.expander("💡 おすすめ", expanded=False):
+        if st.button("✨ 提案を生成", use_container_width=True):
+            with st.spinner("あなたへのおすすめを生成中..."):
+                client = get_client()
+                user_profile = load_user_profile()
+                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile)
+                
+                # コスト加算
+                cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
+                st.session_state.session_cost += cost
+                
+                # グローバル使用量の更新
+                usage_stats["total_cost_usd"] += cost
+                usage_stats["total_input_tokens"] += usage["input_tokens"]
+                usage_stats["total_output_tokens"] += usage["output_tokens"]
+                save_usage(usage_stats)
+                
+                st.markdown(rec_text)
+
     # ---- 設定 (モデルなど) ----
     with st.expander("⚙️ 設定", expanded=False):
         model_options = [
@@ -2327,6 +2441,29 @@ function copyToClipboard(elementId) {{
                         final_answer = draft_answer
 
                 save_usage(usage_stats)
+
+                # --- ユーザープロファイルの自動更新 ---
+                try:
+                    status_container.write("ユーザープロファイルを更新中...")
+                    # クライアント再取得 (念のため)
+                    client_for_profile = get_client()
+                    updated_profile, profile_usage = update_user_profile_from_conversation(
+                        client_for_profile, prompt, final_answer
+                    )
+                    save_user_profile(updated_profile)
+                    
+                    # プロファイル更新コストの加算 (gemini-2.5-flash)
+                    p_cost = calculate_cost("gemini-2.5-flash", profile_usage["input_tokens"], profile_usage["output_tokens"])
+                    st.session_state.session_cost += p_cost
+                    usage_stats["total_cost_usd"] += p_cost
+                    usage_stats["total_input_tokens"] += profile_usage["input_tokens"]
+                    usage_stats["total_output_tokens"] += profile_usage["output_tokens"]
+                    save_usage(usage_stats)
+                    
+                except Exception as e:
+                    # プロファイル更新失敗はメインフローを止めない
+                    print(f"Profile update failed: {e}")
+
                 status_container.update(label="完了！", state="complete", expanded=False)
 
                 # モデル名を表示
