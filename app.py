@@ -140,6 +140,11 @@ except Exception as e:
 GITHUB_MODEL_ID = "o4-mini"
 # ▲▲▲ GitHub Models ここまで ▲▲▲
 
+# ▼▼▼ Grok Model ID ▼▼▼
+# Grok 4.1 Fast Free終了時に簡単に切り替えられるように環境変数化
+GROK_MODEL_ID = os.getenv("GROK_MODEL_ID", "x-ai/grok-4.1-fast:free")
+# ▲▲▲ Grok Model ID ここまで ▲▲▲
+
 
 # =========================
 # Session Management
@@ -340,7 +345,7 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
     }
     
     data = {
-        "model": "x-ai/grok-4.1-fast:free",  # Grok 4.1 Fast (free)
+        "model": GROK_MODEL_ID,
         "messages": [
             {"role": "user", "content": user_content}
         ],
@@ -438,7 +443,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     }
     
     data = {
-        "model": "x-ai/grok-4.1-fast:free",  # Grok 4.1 Fast (free)
+        "model": GROK_MODEL_ID,
         "messages": [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content}
