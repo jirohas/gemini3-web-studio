@@ -436,6 +436,7 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
     }
     
     data = {
+        "model": "gpt-4o-mini",  # GitHub Models用のモデル名
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}
