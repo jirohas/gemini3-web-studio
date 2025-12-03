@@ -232,7 +232,11 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         system_content = (
             "あなたは鬼軍曹レベルの厳しい検察官です。\n"
             "Gemini の回答を、『危険な誤り』『過度な断定』『論理の飛躍』の観点から容赦なくレビューします。\n"
-            "必要な場合のみ、回答の一部を修正・弱める提案をしてください。"
+            "必要な場合のみ、回答の一部を修正・弱める提案をしてください。\n\n"
+            "⚠️ 重要な注意:\n"
+            "・あなたの知識は2024年11月までです\n"
+            "・2024年12月以降の情報は「知識範囲外」と明記し、「存在しない」と断定しないでください\n"
+            "・最新モデルやサービスについては「確認が必要」と記載してください"
         )
         instruction = (
             "以下のGeminiの回答を厳しくチェックしてください。\n"
@@ -245,7 +249,12 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         system_content = (
             "あなたはGeminiと共に最高品質を目指すダブル鬼軍曹の一人です。\n"
             "『危険な過信・過度な断定・情報の古さ』を徹底的に封じ込めてください。\n"
-            "問題が大きければ遠慮なく全文書き直すことも許可します。"
+            "問題が大きければ遠慮なく全文書き直すことも許可します。\n\n"
+            "⚠️ 重要な注意:\n"
+            "・あなたの知識は2024年11月までです\n"
+            "・2024年12月以降の最新情報（新モデル、新サービス等）は知識範囲外です\n"
+            "・最新情報を「架空」「非存在」と断定せず、「2024年11月時点で確認できず、最新情報の可能性」と記載してください\n"
+            "・リンク先確認を求める場合も、「存在しない」ではなく「確認推奨」と表現してください"
         )
         instruction = (
             "以下のGeminiの回答を徹底的にレビューしてください。\n"
@@ -1929,8 +1938,27 @@ function copyToClipboard(elementId) {{
                                 # final_answerはGemini鬼軍曹版のまま使用
                             else:
                                 grok_review_status = "success"
-                                # Grok使用時は、モデル名を明示し、2段構成で表示
+                                # 処理履歴を先に構築
+                                processing_history = []
+                                processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
+                                if enable_meta:
+                                    processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
+                                    if grok_status == "success":
+                                        processing_history.append("**Phase 1.5b**: Grok 独立思考 ✓")
+                                    if claude45_status == "success":
+                                        processing_history.append("**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
+                                    if o4mini_status == "success":
+                                        processing_history.append("**Phase 1.5e**: o4-mini 独立思考 (GitHub Models) ✓")
+                                processing_history.append("**Phase 2**: Gemini 統合フェーズ")
+                                if enable_strict:
+                                    processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
+                                    processing_history.append("**Phase 3b**: Grok 最終レビュー ✓")
+                                
+                                # Grok使用時は、処理履歴+モデル名+2段構成で表示
                                 final_answer = (
+                                    "## 📊 処理履歴\n\n"
+                                    + "\n".join([f"- {item}" for item in processing_history])
+                                    + "\n\n---\n\n"
                                     f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
                                     f"**レビュア: Grok 2 Vision 1212 (OpenRouter)**\n"
                                     f"**モード: {response_mode}**\n\n"
@@ -2088,13 +2116,18 @@ function copyToClipboard(elementId) {{
                         else:
                             processing_history.append("**Phase 3b**: Grok 最終レビュー ⚠️ エラー")
                 
-                # 処理履歴を最終回答に追加
-                final_answer_with_history = (
-                    "## 📊 処理履歴\n\n"
-                    + "\n".join([f"- {item}" for item in processing_history])
-                    + "\n\n---\n\n"
-                    + final_answer
-                )
+                # 処理履歴を最終回答に追加（Grokレビュー成功時は既に含まれているのでスキップ）
+                if grok_review_status == "success":
+                    # Grokレビューが既に処理履歴を含めているのでそのまま使用
+                    final_answer_with_history = final_answer
+                else:
+                    # Grokレビューがない、またはエラー時のみ処理履歴を追加
+                    final_answer_with_history = (
+                        "## 📊 処理履歴\n\n"
+                        + "\n".join([f"- {item}" for item in processing_history])
+                        + "\n\n---\n\n"
+                        + final_answer
+                    )
                 
                 # コピーボタン付き回答表示
                 import html
