@@ -2274,7 +2274,7 @@ function copyToClipboard(elementId) {{
                 if pasted_image_bytes:
                     import base64
 
-                    status_container.write("貼り付けられた画像を処理中...")
+                    routing_status.write("貼り付けられた画像を処理中...")
                     try:
                         if isinstance(pasted_image_bytes, str):
                             if pasted_image_bytes.startswith("data:"):
@@ -2288,21 +2288,21 @@ function copyToClipboard(elementId) {{
                             data=image_bytes_decoded, mime_type="image/png"
                         )
                         current_parts.append(part)
-                        status_container.write("貼り付けられた画像の準備完了")
+                        routing_status.write("貼り付けられた画像の準備完了")
                     except Exception as e:
-                        status_container.error(f"貼り付けられた画像の処理に失敗しました: {e}")
+                        routing_status.error(f"貼り付けられた画像の処理に失敗しました: {e}")
 
                 # YouTube 字幕
                 if youtube_url:
                     vid_id = extract_youtube_id(youtube_url)
                     if vid_id:
-                        status_container.write("YouTubeの字幕を取得中...")
+                        routing_status.write("YouTubeの字幕を取得中...")
                         transcript_text = get_youtube_transcript(vid_id)
                         current_parts.append(
                             types.Part.from_text(text=f"YouTube Transcript:\n{transcript_text}")
                         )
                     else:
-                        status_container.write("無効なYouTube URLです。")
+                        routing_status.write("無効なYouTube URLです。")
 
                 contents_for_model = model_history + [
                     types.Content(role="user", parts=current_parts)
