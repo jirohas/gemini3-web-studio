@@ -2264,9 +2264,9 @@ function copyToClipboard(elementId) {{
                         bytes_data = uploaded_file.getvalue()
                         part = types.Part.from_bytes(data=bytes_data, mime_type=mime_type)
                         current_parts.append(part)
-                        status_container.write(f"ファイル準備完了: {uploaded_file.name}")
+                        routing_status.write(f"ファイル準備完了: {uploaded_file.name}")
                     except Exception as e:
-                        status_container.error(
+                        routing_status.error(
                             f"ファイルの読み込みに失敗しました: {uploaded_file.name} - {e}"
                         )
 
