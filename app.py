@@ -1904,13 +1904,54 @@ st.markdown("""
 
 
 
-# Vertex AIクライアント初期化（エラー時も続行）
-try:
-    client = get_client()
-except Exception as e:
-    st.error(f"⚠️ Vertex AI初期化エラー: {str(e)}")
-    st.info("💡 Streamlit Cloudの「Manage app」→「Settings」→「Secrets」で`GOOGLE_CREDENTIALS`を確認してください。")
-    client = None
+# =========================
+# Initialize Gemini Client
+# =========================
+@st.cache_resource
+def get_gemini_client():
+    """
+    Gemini クライアントを初期化（Streamlit Secrets対応）
+    
+    Streamlit Cloud: st.secretsからサービスアカウント認証情報を使用
+    ローカル開発: Application Default Credentials
+    """
+    try:
+        # Streamlit Cloud: Service Account via secrets
+        if "GOOGLE_CREDENTIALS" in st.secrets:
+            from google.oauth2 import service_account
+            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
+            scoped_creds = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            return genai.Client(
+                vertexai=True,
+                project=VERTEX_PROJECT,
+                location=VERTEX_LOCATION,
+                credentials=scoped_creds
+            )
+        else:
+            # Local development: Application Default Credentials
+            return genai.Client(
+                vertexai=True,
+                project=VERTEX_PROJECT,
+                location=VERTEX_LOCATION,
+            )
+    except Exception as e:
+        print(f"❌ Gemini Client初期化エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+# Initialize client
+client = get_gemini_client()
+
+# Check if client is ready
+if client is None:
+    st.error("❌ Gemini API初期化に失敗しました")
+    st.info("💡 Streamlit Cloudの場合: 「Manage app」→「Settings」→「Secrets」で`GOOGLE_CREDENTIALS`を設定してください")
+    st.info("💡 ローカル開発の場合: `gcloud auth application-default login`を実行してください")
+    st.stop()
 
 # ---- 履歴表示 ----
 
