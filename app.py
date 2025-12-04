@@ -574,14 +574,14 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
 
 def review_with_grok(user_question: str, gemini_answer: str, research_text: str, mode: str = "normal") -> str:
     """
-    Grok 4.1 Fast Free を使って、Geminiの最終回答をレビューする
+    OpenRouterセカンダリモデルを使って、Geminiの最終回答をレビューする
     mode="onigunsou": 厳格な検察官としてレビュー
     mode="full_max": ダブル鬼軍曹としてレビュー
     """
     if not OPENROUTER_API_KEY:
         return "OpenRouter API Key is missing."
 
-    # 共通: Grokの役割を「レビューコメント専用」に厳しく制限
+    # 共通: セカンダリモデルの役割を「レビューコメント専用」に厳しく制限
     system_content = (
         "あなたはGeminiの回答をチェックするレビューアです。\n"
         "\n"
@@ -632,7 +632,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         )
         instruction = (
             "以下の形式で、厳しめのレビューコメントだけ返してください。\n\n"
-            "## Grok評価概要\n"
+            f"## {SECONDARY_MODEL_NAME}評価概要\n"
             "- OK / 要修正 / 危険 のいずれかで評価してください。\n\n"
             "## 重大な問題点\n"
             "- 箇条書きで、特にユーザーを誤誘導しそうな点だけ挙げてください。\n\n"
@@ -686,9 +686,9 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         # ステータスコードとレスポンス本文を返す
         status = e.response.status_code if e.response else "unknown"
         body = e.response.text[:500] if e.response is not None else ""
-        return f"Error calling Grok: HTTP {status}: {body}"
+        return f"Error calling {SECONDARY_MODEL_NAME}: HTTP {status}: {body}"
     except Exception as e:
-        return f"Error calling Grok: {type(e).__name__}: {e}"
+        return f"Error calling {SECONDARY_MODEL_NAME}: {type(e).__name__}: {e}"
 
 
 def _clean_grok_review(text: str) -> str:
@@ -2447,7 +2447,7 @@ function copyToClipboard(elementId) {{
                         synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n"
                     
                     if enable_meta and grok_thought:
-                        synthesis_prompt_text += f"==== 別視点からのリスク指摘 (Grok) ====\n{grok_thought}\n==== Grok ここまで ====\n\n"
+                        synthesis_prompt_text += f"==== 別視点からのリスク指摘 ({SECONDARY_MODEL_NAME}) ====\n{grok_thought}\n==== {SECONDARY_MODEL_NAME} ここまで ====\n\n"
                     
                     
                     # ▼▼▼ Claude 4.5 の回答を統合プロンプトに加える ▼▼▼
@@ -2567,7 +2567,7 @@ function copyToClipboard(elementId) {{
                         # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
                         use_grok_reviewer = (mode_category == "🎯 回答モード(多層)" and (enable_strict or "鬼軍曹" in response_mode))
                         if use_grok_reviewer and OPENROUTER_API_KEY:
-                            status_container.write("Grokによる最終レビュー実行中...")
+                            status_container.write(f"{SECONDARY_MODEL_NAME}による最終レビュー実行中...")
                             
                             review_mode = "normal"
                             if "鬼軍曹" in response_mode:
@@ -2578,9 +2578,9 @@ function copyToClipboard(elementId) {{
                             grok_answer = review_with_grok(prompt, final_answer, research_text, mode=review_mode).strip()
                             
                             # エラーチェック：Grokがエラー文字列を返した場合
-                            if grok_answer.startswith("Error calling Grok:"):
+                            if grok_answer.startswith("Error calling"):
                                 grok_review_status = "error"
-                                status_container.error(f"⚠️ Grok 最終レビュー エラー\n\n{grok_answer}")
+                                status_container.error(f"⚠️ {SECONDARY_MODEL_NAME} 最終レビュー エラー\n\n{grok_answer}")
                                 # final_answerはGemini鬼軍曹版のまま使用
                             else:
                                 grok_review_status = "success"
@@ -2590,7 +2590,7 @@ function copyToClipboard(elementId) {{
                                 if enable_meta:
                                     processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
                                     if grok_status == "success":
-                                        processing_history.append("**Phase 1.5b**: Grok 独立思考 ✓")
+                                        processing_history.append(f"**Phase 1.5b**: {SECONDARY_MODEL_NAME} 独立思考 ✓")
                                     if claude45_status == "success":
                                         processing_history.append("**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
                                     if o4mini_status == "success":
@@ -2598,7 +2598,7 @@ function copyToClipboard(elementId) {{
                                 processing_history.append("**Phase 2**: Gemini 統合フェーズ")
                                 if enable_strict:
                                     processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
-                                    processing_history.append("**Phase 3b**: Grok 最終レビュー ✓")
+                                    processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
                                 
                                 # Grok使用時は、処理履歴+モデル名+2段構成で表示
                                 final_answer = (
@@ -2606,16 +2606,16 @@ function copyToClipboard(elementId) {{
                                     + "\n".join([f"- {item}" for item in processing_history])
                                     + "\n\n---\n\n"
                                     f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
-                                    f"**レビュア: Grok 2 Vision 1212 (OpenRouter)**\n"
+                                    f"**レビュア: {SECONDARY_MODEL_NAME} (OpenRouter)**\n"
                                     f"**モード: {response_mode}**\n\n"
                                     "---\n\n"
                                     "## ✅ 最終回答（Gemini統合版）\n\n"
                                     f"{final_answer}\n\n"
                                     "---\n\n"
-                                    "## 🔍 Grok によるレビュー\n\n"
+                                    f"## 🔍 {SECONDARY_MODEL_NAME} によるレビュー\n\n"
                                     f"{grok_answer}"
                                 )
-                                status_container.write("✓ Grok最終レビュー完了")
+                                status_container.write(f"✓ {SECONDARY_MODEL_NAME}最終レビュー完了")
                         else:
                             # Geminiのみの場合もモデル名を表示（多層モードの場合）
                             if mode_category == "🎯 回答モード(多層)":
@@ -2847,9 +2847,9 @@ AI: {final_answer[:500]}
                     processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
                     if use_grok_reviewer:
                         if grok_review_status == "success":
-                            processing_history.append("**Phase 3b**: Grok 最終レビュー ✓")
+                            processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
                         else:
-                            processing_history.append("**Phase 3b**: Grok 最終レビュー ⚠️ エラー")
+                            processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ⚠️ エラー")
                 
                 # 処理履歴を最終回答に追加（Grokレビュー成功時は既に含まれているのでスキップ）
                 if grok_review_status == "success":
