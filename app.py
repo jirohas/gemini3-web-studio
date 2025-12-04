@@ -652,8 +652,13 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
         # カットオフ系のノイズを削除
         raw_content = result["choices"][0]["message"]["content"]
         return _clean_grok_review(raw_content)
+    except requests.exceptions.HTTPError as e:
+        # ステータスコードとレスポンス本文を返す
+        status = e.response.status_code if e.response else "unknown"
+        body = e.response.text[:500] if e.response is not None else ""
+        return f"Error calling Grok: HTTP {status}: {body}"
     except Exception as e:
-        return f"Error calling Grok: {e}"
+        return f"Error calling Grok: {type(e).__name__}: {e}"
 
 
 def _clean_grok_review(text: str) -> str:
@@ -2281,6 +2286,28 @@ function copyToClipboard(elementId) {{
                     if enable_meta:
                         deep_instruction = base_system_instruction + f"""
 
+【Phase 3: 深い統合と総括指示】
+
+上記の多段フェーズで得られた情報（リサーチメモ、Grok回答、Claude回答、o4-mini回答、各レビュー）を総合し、
+ユーザーにとって最も価値ある最終回答を作成してください。
+
+**将来予測の注意事項（特にマクロ経済・株価など）:**
+・将来の数値（株価水準や金利水準）は、具体的な水準を1つに固定せず、「レンジ」と「不確実性」を明示すること。
+・政治シナリオも1つに決め打ちせず、複数の可能性を示すこと。
+・断定的な予測ではなく、シナリオとリスクに寄せた表現にすること。
+
+**文章スタイル:**
+- 見出し・箇条書きを効果的に使い、読みやすくする
+- Markdownを許可するが、連続する空行は1行まで
+- リサーチメモに引用元URLがあれば、適宜参照リンクとして提示する
+
+**思考プロセスの公開:**
+- 「Phase 1: リサーチ」「Phase 2: 多モデル回答」「Phase 3: 統合」を踏まえた上で、
+  どのような判断軸で最終回答を構成したのかを軽く述べてもよい
+
+ユーザーの質問:
+{prompt}
+
 **あなたの役割**: 最終判断エージェント
 
 **タスク**: 調査メモとサブモデル(Grok, Claude, o4-mini)の指摘を統合し、
@@ -2339,21 +2366,6 @@ function copyToClipboard(elementId) {{
                     else:
                         deep_instruction = base_system_instruction + f"""
 
-**あなたの役割**: 最終回答エージェント
-
-**タスク**: 調査メモを唯一の根拠として、構造化された回答を作成してください。
-
-**重要 - 現在は{current_date}です**:
-- **調査メモに含まれる日付・事実を、あなたの学習データよりも絶対的に優先してください**
-- 「{current_year}年」の情報が調査メモにある場合、それを正として扱ってください
-
-**構成**:
-1. **結論**（2-3行で明確に）
-2. **詳細な分析**（調査メモに基づく）
-3. **考慮すべき要因やリスク**（該当する場合）
-
-**重要**: 
-- 新しい事実を勝手に作らず、調査メモの範囲内で推論すること
 - **調査メモに含まれる最新の情報（最新のモデル名、バージョン、日付など）を優先的に使用すること**
 - 古い情報と新しい情報が混在する場合は、新しい情報を優先すること
 """
@@ -2501,7 +2513,7 @@ function copyToClipboard(elementId) {{
                             # エラーチェック：Grokがエラー文字列を返した場合
                             if grok_answer.startswith("Error calling Grok:"):
                                 grok_review_status = "error"
-                                status_container.write("⚠ Grok 最終レビューはエラーのためスキップしました")
+                                status_container.error(f"⚠️ Grok 最終レビュー エラー\n\n{grok_answer}")
                                 # final_answerはGemini鬼軍曹版のまま使用
                             else:
                                 grok_review_status = "success"
@@ -2645,13 +2657,15 @@ AI: {final_answer[:500]}
 
 【厳守ルール】
 - 質問文だけを書いてください。解説や前置きは禁止です。
-- 各質問は 25〜30 文字以内に収めてください。
+- 各質問は 40文字以内 を目安にすること。
+- 各質問は必ず「?」または「？」で終わること。
+- 質問文以外（解説や理由など）は書かないこと。
 - 出力形式は **Markdown の箇条書きのみ** とします。
 
 【出力フォーマット（厳守）】
-- 質問1
-- 質問2
-- 質問3
+- 質問文1？
+- 質問文2？
+- 質問文3？
 """
                     suggestion_resp = client_for_extras.models.generate_content(
                         model="gemini-2.5-flash",
@@ -2661,40 +2675,40 @@ AI: {final_answer[:500]}
                     
                     # 出力を整形してから追加
                     import re
-                    suggestions_text = extract_text_from_response(suggestion_resp).strip()
+                    raw = extract_text_from_response(suggestion_resp).strip()
+                    lines = [l.strip() for l in raw.splitlines() if l.strip()]
+
+                    questions = []
+                    for l in lines:
+                        if not l.startswith("-"):
+                            continue
+                        q = l.lstrip("- ").strip()
+                        if not q:
+                            continue
+                        # 「理由:」等が付いていたら手前だけを採用
+                        if "理由" in q:
+                            q = q.split("理由", 1)[0].strip()
+                        # 40文字を超える場合は切り詰める
+                        if len(q) > 40:
+                            q = q[:40].rstrip() + "..."
+                        # 必ず?で終わるようにする
+                        if not q.endswith(("?", "？")):
+                            q += "？"
+                        questions.append(f"- {q}")
+                        if len(questions) >= 3:
+                            break
+
+                    if questions:
+                        suggestions_text = "\n".join(questions)
+                        final_answer += "\n\n---\n\n### 🔁 次に試せる質問候補\n" + suggestions_text
                     
-                    if suggestions_text:
-                        # 行単位にばらす
-                        lines = [l for l in suggestions_text.splitlines() if l.strip()]
-                        cleaned = []
-
-                        for line in lines:
-                            s = line.strip()
-                            # "- " で始まる行だけ残す
-                            if s.startswith("- "):
-                                cleaned.append(s)
-                            elif re.match(r"^[0-9]+\.", s):
-                                # "1. 質問" 形式も一応拾う
-                                cleaned.append("- " + s.split(".", 1)[1].strip())
-
-                        # 3つだけに制限
-                        cleaned = cleaned[:3]
-
-                        # 最後の質問が明らかに短すぎる / 途中っぽい場合は捨てる
-                        if cleaned and len(cleaned[-1]) < 5:
-                            cleaned = cleaned[:-1]
-
-                        if cleaned:
-                            suggestions_text = "\n".join(cleaned)
-                            final_answer += "\n\n---\n\n### 🔁 次に試せる質問候補\n" + suggestions_text
-                        
-                            # 提案生成コスト
-                            s_usage = suggestion_resp.usage_metadata
-                            s_cost = calculate_cost("gemini-2.5-flash", s_usage.prompt_token_count, s_usage.candidates_token_count)
-                            st.session_state.session_cost += s_cost
-                            usage_stats["total_cost_usd"] += s_cost
-                            usage_stats["total_input_tokens"] += s_usage.prompt_token_count
-                            usage_stats["total_output_tokens"] += s_usage.candidates_token_count
+                        # 提案生成コスト
+                        s_usage = suggestion_resp.usage_metadata
+                        s_cost = calculate_cost("gemini-2.5-flash", s_usage.prompt_token_count, s_usage.candidates_token_count)
+                        st.session_state.session_cost += s_cost
+                        usage_stats["total_cost_usd"] += s_cost
+                        usage_stats["total_input_tokens"] += s_usage.prompt_token_count
+                        usage_stats["total_output_tokens"] += s_usage.candidates_token_count
                     
                     save_usage(usage_stats)
                     
