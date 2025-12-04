@@ -1374,12 +1374,13 @@ with st.sidebar:
                 response_mode = st.radio(
                    "モード",
                     [
+                        "AUTO（質問に応じて自動）",  # Phase C: Auto routing
                         "熟考 + 鬼軍曹",
                         "熟考 (本気MAX)Az",
                         "熟考 (本気MAX)ms/Az",
                         "熟考(メタ思考)+grok検索強化版",
                     ],
-                    index=2  # デフォルト: ms/Az (o4-mini付き)
+                    index=0  # デフォルト: AUTO
                 )
             elif mode_type == "grok通常モード":
                 response_mode = st.radio(
@@ -2185,19 +2186,64 @@ function copyToClipboard(elementId) {{
                 grounding_metadata = None
                 
                 # =========================
-                # モード設定の解析
+                # Phase C: AUTO Mode Routing
                 # =========================
-                # β1通常モード以外はリサーチを実行
-                enable_research = "β1" not in response_mode
-                enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
-                enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
+                routing_info = None  # Store for debug display
                 
-                # Grok X検索はニュース/トレンド系のみ
-                def should_use_x_search(prompt: str) -> bool:
-                    keywords = ["Xで", "Twitter", "ツイッター", "ポスト", "トレンド", "炎上", "バズ", "話題"]
-                    return any(kw in prompt for kw in keywords)
-                
-                enable_grok_x_search = "grok" in response_mode and should_use_x_search(prompt)
+                if "AUTO" in response_mode:
+                    try:
+                        from router import analyze_question_for_routing, route_question_to_pipeline
+                        
+                        status_container.write("🤖 AUTO: 質問を分析中...")
+                        
+                        # Analyze question
+                        classification = analyze_question_for_routing(
+                            client=client,
+                            user_question=prompt,
+                            user_profile=st.session_state.get("user_profile")
+                        )
+                        
+                        # Determine pipeline
+                        pipeline = route_question_to_pipeline(classification)
+                        
+                        # Override flags based on routing
+                        enable_research = pipeline["enable_research"]
+                        enable_meta = pipeline["enable_meta"]
+                        enable_strict = pipeline["enable_strict"]
+                        enable_grok_x_search = pipeline.get("use_x_search", False)
+                        
+                        # Store routing info for debug display
+                        routing_info = {
+                            "classification": classification,
+                            "pipeline": pipeline
+                        }
+                        
+                        status_container.success(f"✓ AUTO判定: {pipeline['routing_reason']}")
+                        
+                    except Exception as e:
+                        # Fallback to safe default (medium research mode)
+                        import traceback
+                        traceback.print_exc()
+                        status_container.warning(f"⚠️ AUTO分析失敗、通常モードで処理: {str(e)[:80]}")
+                        enable_research = True
+                        enable_meta = False
+                        enable_strict = False
+                        enable_grok_x_search = False
+                else:
+                    # =========================
+                    # Manual Mode Settings (従来通り)
+                    # =========================
+                    # β1通常モード以外はリサーチを実行
+                    enable_research = "β1" not in response_mode
+                    enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
+                    enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
+                    
+                    # Grok X検索はニュース/トレンド系のみ
+                    def should_use_x_search(prompt: str) -> bool:
+                        keywords = ["Xで", "Twitter", "ツイッター", "ポスト", "トレンド", "炎上", "バズ", "話題"]
+                        return any(kw in prompt for kw in keywords)
+                    
+                    enable_grok_x_search = "grok" in response_mode and should_use_x_search(prompt)
 
                 # =========================
                 # 通常モード (高速 / 鬼軍曹)
@@ -2851,6 +2897,32 @@ function copyToClipboard(elementId) {{
                             else:
                                 grok_review_status = "success"
                                 # 処理履歴を先に構築
+                                
+                # ▼▼▼ Phase C: AUTO Routing Debug Display ▼▼▼
+                if routing_info:
+                    with st.expander("🤖 AUTO Routing Info", expanded=False):
+                        st.markdown("### 質問分析結果")
+                        classification = routing_info["classification"]
+                        st.json(classification)
+                        
+                        st.markdown("### ルーティング判定")
+                        pipeline = routing_info["pipeline"]
+                        st.markdown(f"**モード**: `{pipeline['mode_name']}`")
+                        st.markdown(f"**判定理由**: {pipeline['routing_reason']}")
+                        
+                        st.markdown("**有効化されたフラグ**:")
+                        flags_display = {
+                            "enable_research": pipeline["enable_research"],
+                            "enable_meta": pipeline["enable_meta"],
+                            "enable_strict": pipeline["enable_strict"],
+                            "use_grok": pipeline.get("use_grok", False),
+                            "use_claude": pipeline.get("use_claude", False),
+                            "use_o4_mini": pipeline.get("use_o4_mini", False),
+                            "use_x_search": pipeline.get("use_x_search", False)
+                        }
+                        st.json(flags_display)
+                # ▲▲▲ Phase C: AUTO Routing Debug ここまで ▲▲▲
+                
                                 processing_history = []
                                 processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
                                 if enable_meta:
