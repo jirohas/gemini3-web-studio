@@ -2218,10 +2218,41 @@ function copyToClipboard(elementId) {{
         "role": "user",
         "content": prompt,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            role=msg["role"],
-                            parts=[types.Part.from_text(text=msg["content"])],
+    })
+    update_current_session_messages(messages)
+
+    st.write("🔍 DEBUG: Starting chat processing...")
+
+    # ========================================
+    # Phase C: AUTO Router Integration
+    # ========================================
+    routing_info = None
+    
+    if response_mode == "AUTO（質問に応じて自動）":
+        with st.status("🤖 AUTO: 質問を分析中...", expanded=False) as routing_status:
+            try:
+                from router import analyze_question_for_routing, route_question_to_pipeline
+                
+                # Step 1: Analyze question
+                classification = analyze_question_for_routing(client, prompt)
+
+                # 過去のメッセージをモデルの履歴に変換
+                model_history = []
+                for msg in messages:
+                    if msg["role"] == "user":
+                        model_history.append(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part.from_text(text=msg["content"])],
+                            )
                         )
-                    )
+                    elif msg["role"] == "model":
+                        model_history.append(
+                            types.Content(
+                                role=msg["role"],
+                                parts=[types.Part.from_text(text=msg["content"])],
+                            )
+                        )
 
                 # 現在のターン
                 current_parts = [types.Part.from_text(text=prompt)]
