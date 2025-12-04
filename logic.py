@@ -1,8 +1,16 @@
+"""
+Common utility module for Gemini3 Web Studio.
+
+⚠️ IMPORTANT: This module is imported by app.py at startup.
+   - Do NOT rename or delete this file
+   - Do NOT import streamlit here (causes circular dependency)
+   - Keep this as a pure utility module with no UI dependencies
+"""
+
 import os
 import json
 import re
 import datetime
-import streamlit as st
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
