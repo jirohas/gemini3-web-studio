@@ -3408,7 +3408,7 @@ function copyToClipboard(elementId) {{
                 update_current_session_messages(messages)
 
             except Exception as e:
-                status_container.update(label="Error", state="error")
+                # Error handler - status_container doesn't exist in this scope
                 err_text = str(e)
                 if "RESOURCE_EXHAUSTED" in err_text or "429" in err_text:
                     st.error(
