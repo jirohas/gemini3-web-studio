@@ -2141,15 +2141,38 @@ if hasattr(st.session_state, "generate_image_trigger") and st.session_state.gene
                 st.error(f"画像生成エラー: {e}")
 
 # =========================
-# チャット入力
+# Budget Check & Warnings
 # =========================
+stop_generation = usage_stats["total_cost_usd"] >= MAX_BUDGET_USD
 
-prompt = st.chat_input("何か聞いてください...", disabled=stop_generation)
+# Show budget status in sidebar
+with st.sidebar:
+    st.caption("---")
+    st.caption(f"💰 現在のコスト: ${usage_stats['total_cost_usd']:.4f} / ${MAX_BUDGET_USD:.2f}")
+    if stop_generation:
+        st.warning("⚠️ 予算上限に達しています")
+
+# Show warning in main area if budget exceeded
+if stop_generation:
+    st.warning(
+        "⚠️ **コスト上限に達しました**\n\n"
+        f"現在のコスト: ${usage_stats['total_cost_usd']:.4f} / 上限: ${MAX_BUDGET_USD:.2f}\n\n"
+        "新しいリクエストは一時的にブロックされます。開発中はlogic.pyの`MAX_BUDGET_USD`を増やしてください。"
+    )
+
+# =========================
+# チャット入力（常に表示）
+# =========================
+prompt = st.chat_input("何か聞いてください...")
 
 if prompt:
+    # Budget check at submission time
     if stop_generation:
-        st.error("予算上限に達しました。生成できません。")
-    else:
+        st.error("❌ コスト上限に達しているため、この実行はキャンセルしました。予算設定を見直してください。")
+        st.info(f"現在: ${usage_stats['total_cost_usd']:.4f} / 上限: ${MAX_BUDGET_USD:.2f}")
+        st.stop()
+    
+    # Existing processing continues below...
         # ---- ユーザー発言表示 ----
         with st.chat_message("user"):
             # コピーボタン付きメッセージ表示
