@@ -234,17 +234,23 @@ def compact_newlines(text: str) -> str:
     # 2行以上の連続改行（= 1行以上の空行）を1行の空行（改行2つ）に圧縮
     return re.sub(r"\n\n+", "\n\n", text)
 
-def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple:
+def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple[str, str, dict]:
     """
-    research_textから事実とリスクをJSON形式で抽出
+    Phase B以前の後方互換用（v1）：事実とリスクをMarkdown形式で抽出
+    
+    ⚠️ このv1関数は、以下の場合のみ使用されます：
+    - Phase B IR抽出（extract_facts_and_risks_v2）が失敗した場合のフォールバック
+    - 古いセッションとの互換性維持
+    
+    Phase B実装後は、extract_facts_and_risks_v2() がメインパスです。
     
     Args:
-        client: Vertex AI client
-        model_id: モデルID
-        research_text: 調査結果テキスト
+        client: Gemini client
+        model_id: 使用するモデル
+        research_text: 調査テキスト
     
     Returns:
-        (fact_summary, risk_summary, usage_dict): 事実、リスク、usage情報
+        Tuple of (fact_summary, risk_summary, usage_dict)
     """
     extraction_prompt = f"""以下の調査結果から、事実とリスクを分離してください。
 
@@ -2676,15 +2682,32 @@ function copyToClipboard(elementId) {{
                     else:
                         deep_instruction = base_system_instruction + f"""
 
-- **調査メモに含まれる最新の情報（最新のモデル名、バージョン、日付など）を優先的に使用すること**
+- **調査メモまたは構造化IR（JSON）に含まれる最新の情報（最新のモデル名、バージョン、日付など）を優先的に使用すること**
 - 古い情報と新しい情報が混在する場合は、新しい情報を優先すること
+- **構造化IRがある場合は、「確認された事実」「リスク」「選択肢」「不明点」セクションを最優先で参照すること**
+- **IRに含まれていない新しい事実を勝手に作らないこと**
 """
                     
-                    synthesis_prompt_text = (
-                        f"重要: 今日は{current_date}です。古い情報を回答に含めないでください。\n\n"
-                        f"ユーザーの質問: {prompt}\n\n"
-                        f"==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\n"
-                    )
+                    # Phase B: IR-based synthesis prompt (IR優先ロジック)
+                    if current_ir is not None:
+                        # IR extraction succeeded - use structured IR
+                        from research_ir import build_synthesis_prompt_from_ir
+                        
+                        ir_block = build_synthesis_prompt_from_ir(current_ir, prompt)
+                        
+                        synthesis_prompt_text = (
+                            f"重要: 今日は{current_date}です。古い情報を回答に含めないでください。\n\n"
+                            f"==== 構造化調査IR (Phase B) ====\n"
+                            f"{ir_block}\n"
+                            f"==== IRここまで ====\n\n"
+                        )
+                    else:
+                        # IR extraction failed or not available - fallback to v1
+                        synthesis_prompt_text = (
+                            f"重要: 今日は{current_date}です。古い情報を回答に含めないでください。\n\n"
+                            f"ユーザーの質問: {prompt}\n\n"
+                            f"==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\n"
+                        )
                     
                     if enable_meta and questions_text:
                         synthesis_prompt_text += f"==== メタ質問一覧 ====\n{questions_text}\n==== メタ質問ここまで ====\n\n"
@@ -2705,7 +2728,7 @@ function copyToClipboard(elementId) {{
                     
                     # 統合指示の修正
                     if enable_meta and (grok_thought or claude45_thought or o4mini_thought):
-                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル (Grok, Claude 4.5 Sonnet, o4-mini) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
+                        synthesis_prompt_text += f"指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. 他のモデル ({SECONDARY_MODEL_NAME}, Claude 4.5 Sonnet, o4-mini) の回答案も参考にしつつ（ただし盲信せず）、独自の視点で統合してください。\n3. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     elif enable_meta and questions_text:
                         synthesis_prompt_text += "指示:\n1. まず、メタ質問 Q1〜Qn に一つずつ簡潔に答えてください。\n2. そのうえで、それらの回答を踏まえた『全体としての結論・分析・示唆』をまとめてください。"
                     else:
