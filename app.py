@@ -203,10 +203,23 @@ except Exception as e:
 GITHUB_MODEL_ID = "o4-mini"
 # ▲▲▲ GitHub Models ここまで ▲▲▲
 
-# ▼▼▼ Grok Model ID ▼▼▼
-# Grok 4.1 Fast Free終了時に簡単に切り替えられるように環境変数化
-GROK_MODEL_ID = os.getenv("GROK_MODEL_ID", "x-ai/grok-4.1-fast:free")
-# ▲▲▲ Grok Model ID ここまで ▲▲▲
+# ▼▼▼ OpenRouter セカンダリモデル（元 Grok スロット）▼▼▼
+# デフォルトは Amazon Nova 2 Lite (free)
+DEFAULT_SECONDARY_MODEL_ID = "amazon/nova-2-lite-v1:free"
+
+# 環境変数優先で差し替え可能
+SECONDARY_MODEL_ID = (
+    os.getenv("OPENROUTER_SECONDARY_MODEL_ID")   # 新しい推奨環境変数
+    or os.getenv("GROK_MODEL_ID")               # 互換性のために残す
+    or DEFAULT_SECONDARY_MODEL_ID
+)
+
+# UI 用に人間に見せる名前も ENV から変えられるようにしておく
+SECONDARY_MODEL_NAME = os.getenv(
+    "OPENROUTER_SECONDARY_MODEL_NAME",
+    "Amazon Nova 2 Lite (free)",
+)
+# ▲▲▲ OpenRouter セカンダリモデル ここまで ▲▲▲
 
 
 # =========================
@@ -473,22 +486,20 @@ def generate_recommendations(client, sessions, current_session_id, user_profile,
 
 def think_with_grok(user_question: str, research_text: str, enable_x_search: bool = False, mode: str = "default") -> str:
     """
-    Grok 4.1 Fast Free を使って、リサーチメモを元に独立した回答案を作成する
+    OpenRouter のセカンダリモデル（デフォルト: amazon/nova-2-lite-v1:free）で
+    リサーチメモを別視点から検討する。
     enable_x_search=True の場合、X/Twitter情報の活用を促す
     mode="full_max" の場合、独立したリード研究者として振る舞う
     """
     if not OPENROUTER_API_KEY:
-        return "OpenRouter API Key is missing."
+        raise RuntimeError("OpenRouter API Key is missing.")
 
     # X検索強化版の場合、特別な指示を追加
     x_search_instruction = ""
     if enable_x_search:
         x_search_instruction = (
-            "\n\n**重要**: あなたはGrokとしてX（Twitter）の情報にアクセスできます。\n"
-            "上記の調査メモに加えて、X上の最新のトレンド・議論・反応を考慮し、\n"
-            "それらを含めた独立した回答案を作成してください。\n\n"
-            "注意: X上の情報が確認できない場合は、その旨を正直に述べてください。\n"
-            "架空の投稿や存在しない反応を作成しないこと。"
+            "\n\n**重要**: あなたは X（Twitter）の情報にアクセスできると仮定して構いませんが、"
+            "実際にWebを閲覧したかのような断定的表現（「公式サイトを確認したところ〜」など）は避けてください。\n"
         )
     
     if mode == "full_max":
@@ -521,12 +532,14 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
     }
     
     data = {
-        "model": GROK_MODEL_ID,
+        "model": SECONDARY_MODEL_ID,
         "messages": [
             {"role": "user", "content": user_content}
         ],
         "temperature": 0.7,
         "max_tokens": 2000,
+        # Nova 2 Lite など reasoning 対応モデルならここで有効化も可能：
+        # "reasoning": {"effort": "medium"},
     }
 
     try:
@@ -534,13 +547,14 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=data,
-            timeout=60
+            timeout=60,
         )
         response.raise_for_status()
         result = response.json()
         return result["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"Error calling Grok: {e}"
+        # ここは raise にして、呼び出し側で error として扱う方が安全
+        raise RuntimeError(f"Error calling OpenRouter model ({SECONDARY_MODEL_ID}): {e}")
 
 def review_with_grok(user_question: str, gemini_answer: str, research_text: str, mode: str = "normal") -> str:
     """
@@ -631,7 +645,7 @@ def review_with_grok(user_question: str, gemini_answer: str, research_text: str,
     }
     
     data = {
-        "model": GROK_MODEL_ID,
+        "model": SECONDARY_MODEL_ID,
         "messages": [
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content}
@@ -2166,26 +2180,31 @@ function copyToClipboard(elementId) {{
                             usage_stats["total_input_tokens"] += (question_resp.usage_metadata.prompt_token_count or 0)
                             usage_stats["total_output_tokens"] += (question_resp.usage_metadata.candidates_token_count or 0)
 
-                    # --- Phase 1.5b: Grok 独立思考 (多層モードのみ) ---
+                    # --- Phase 1.5b: OpenRouter セカンダリモデル 独立思考 (多層モードのみ) ---
                     grok_thought = ""
                     grok_status = "skipped"
+                    grok_error_msg = None
+
                     if enable_meta and OPENROUTER_API_KEY:
-                        status_container.write("Phase 1.5b: Grok 独立思考中...")
+                        status_container.write(f"Phase 1.5b: OpenRouterセカンダリモデル ({SECONDARY_MODEL_NAME}) 独立思考中...")
                         grok_mode = "full_max" if "MAX" in response_mode else "default"
                         try:
                             # fact/risk summaryがあれば使用、なければresearch_text
                             grok_input = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}" if fact_summary else research_text
                             grok_thought = think_with_grok(prompt, grok_input, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
+
                             if grok_thought:
                                 grok_status = "success"
-                                status_container.write("✓ Grok 4.1 Fast Free 独立思考完了")
-                                with status_container.expander("Grokの独立回答案", expanded=False):
+                                status_container.write(f"✓ {SECONDARY_MODEL_NAME} 独立思考完了")
+                                with status_container.expander(f"{SECONDARY_MODEL_NAME} の独立回答案", expanded=False):
                                     st.markdown(grok_thought)
                             else:
                                 grok_status = "empty"
+                                status_container.write(f"ℹ️ {SECONDARY_MODEL_NAME} から有効な出力がありませんでした")
                         except Exception as e:
                             grok_status = "error"
-                            status_container.write(f"⚠ Grok思考エラー: {e}")
+                            grok_error_msg = str(e)
+                            status_container.write(f"⚠ {SECONDARY_MODEL_NAME} 思考エラー: {e}")
 
                     # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
                     claude45_thought = ""
@@ -2723,11 +2742,11 @@ AI: {final_answer[:500]}
                 # Grok Status
                 if enable_meta:
                     if grok_status == "success":
-                        models_used.append("Grok: 4.1-fast-free (OK)")
+                        models_used.append(f"OpenRouter: {SECONDARY_MODEL_NAME} (OK)")
                     elif grok_status == "error":
-                        models_used.append("Grok: 4.1-fast-free (Error)")
+                        models_used.append(f"OpenRouter: {SECONDARY_MODEL_NAME} (Error)")
                     elif grok_status == "empty":
-                        models_used.append("Grok: 4.1-fast-free (Empty)")
+                        models_used.append(f"OpenRouter: {SECONDARY_MODEL_NAME} (Empty)")
                 
                 # ▼▼▼ Claude 4.5 Sonnet Status ▼▼▼
                 if claude45_status == "success":
@@ -2752,11 +2771,14 @@ AI: {final_answer[:500]}
                 
                 if enable_meta:
                     processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
-                
+                # Grok/セカンダリモデル status
                 if grok_status == "success":
-                    processing_history.append("**Phase 1.5b**: Grok 独立思考 ✓")
+                    processing_history.append(f"**Phase 1.5b**: OpenRouterセカンダリモデル ({SECONDARY_MODEL_NAME}) 独立思考 ✓")
                 elif grok_status == "error":
-                    processing_history.append("**Phase 1.5b**: Grok 独立思考 ⚠️ エラー")
+                    msg = grok_error_msg or "エラー"
+                    processing_history.append(f"**Phase 1.5b**: OpenRouterセカンダリモデル ({SECONDARY_MODEL_NAME}) 独立思考 ⚠️ {msg}")
+                elif grok_status == "empty":
+                    processing_history.append(f"**Phase 1.5b**: OpenRouterセカンダリモデル ({SECONDARY_MODEL_NAME}) 独立思考（出力なし）")
                 
                 # Phase 1.5c (Puter) は廃止
                 
