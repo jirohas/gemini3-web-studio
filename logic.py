@@ -165,33 +165,22 @@ def save_sessions(sessions):
     with open(SESSIONS_FILE, "w") as f:
         json.dump({"sessions": sessions}, f, indent=4, ensure_ascii=False)
 
-@st.cache_resource
 def get_client():
     """
-    Vertex AI クライアントを初期化（エラー時はNoneを返す）
+    Gemini クライアントを取得（Vertex AI経由）
+    
+    ⚠️ NOTE: 
+    - @st.cache_resource removed to avoid streamlit dependency
+    - Caching should be handled in app.py if needed
+    - Uses Application Default Credentials (gcloud auth)
     """
     try:
-        # Streamlit Cloud用の認証（Service Account）
-        if "GOOGLE_CREDENTIALS" in st.secrets:
-            from google.oauth2 import service_account
-            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
-            scoped_creds = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            return genai.Client(
-                vertexai=True,
-                project=VERTEX_PROJECT,
-                location=VERTEX_LOCATION,
-                credentials=scoped_creds
-            )
-        else:
-            # ローカル開発用（Application Default Credentials）
-            return genai.Client(
-                vertexai=True,
-                project=VERTEX_PROJECT,
-                location=VERTEX_LOCATION,
-            )
+        # Application Default Credentials (works for local dev and Cloud)
+        return genai.Client(
+            vertexai=True,
+            project=VERTEX_PROJECT,
+            location=VERTEX_LOCATION,
+        )
     except Exception as e:
         # エラー時はNoneを返す（アプリを止めない）
         print(f"❌ Vertex AI初期化エラー: {e}")
