@@ -2925,18 +2925,18 @@ function copyToClipboard(elementId) {{
                 
                 processing_history = []
                 processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
-                                if enable_meta:
-                                    processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
-                                    if grok_status == "success":
-                                        processing_history.append(f"**Phase 1.5b**: {SECONDARY_MODEL_NAME} 独立思考 ✓")
-                                    if claude45_status == "success":
-                                        processing_history.append("**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
-                                    if o4mini_status == "success":
-                                        processing_history.append("**Phase 1.5e**: o4-mini 独立思考 (GitHub Models) ✓")
-                                processing_history.append("**Phase 2**: Gemini 統合フェーズ")
-                                if enable_strict:
-                                    processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
-                                    processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
+                if enable_meta:
+                    processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
+                    if grok_status == "success":
+                        processing_history.append(f"**Phase 1.5b**: {SECONDARY_MODEL_NAME} 独立思考 ✓")
+                    if claude45_status == "success":
+                        processing_history.append("**Phase 1.5d**: Claude 4.5 Sonnet 独立思考 (AWS Bedrock) ✓")
+                    if o4mini_status == "success":
+                        processing_history.append("**Phase 1.5e**: o4-mini 独立思考 (GitHub Models) ✓")
+                processing_history.append("**Phase 2**: Gemini 統合フェーズ")
+                if enable_strict:
+                    processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
+                    processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
                                 
                                 # Grok使用時は、処理履歴+モデル名+2段構成で表示
                                 final_answer = (
