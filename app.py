@@ -2179,15 +2179,14 @@ if prompt:
     
     st.write("🔍 DEBUG: Passed budget check, starting processing...")
     
-    # Existing processing continues below...
-        # ---- ユーザー発言表示 ----
-        with st.chat_message("user"):
-            # コピーボタン付きメッセージ表示
-            import html
-            escaped_prompt = html.escape(prompt)
-            message_id = f"user_msg_{len(messages)}"
-            
-            st.markdown(f"""
+    # ---- ユーザー発言表示 ----
+    with st.chat_message("user"):
+        # コピーボタン付きメッセージ表示
+        import html
+        escaped_prompt = html.escape(prompt)
+        message_id = f"user_msg_{len(messages)}"
+        
+        st.markdown(f"""
 <div style="position: relative;">
     <div id="{message_id}" style="padding-right: 40px;">{escaped_prompt}</div>
     <button onclick="copyToClipboard('{message_id}')" style="position: absolute; right: 0; top: 0; background: transparent; border: 1px solid #444; border-radius: 4px; cursor: pointer; padding: 4px 8px; color: #aaa; font-size: 12px;" title="コピー">
