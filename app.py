@@ -2532,7 +2532,11 @@ function copyToClipboard(elementId) {{
   4. 「予測が外れるとしたらどんなパターンか？」
 
 **出力**: 箇条書き（Q1, Q2...）のみ
-```
+"""
+
+                        question_contents = [types.Content(role="user", parts=[types.Part(text=f"ユーザーの元の質問:\n{prompt}\n\n==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\nこのテーマをさらに深掘りするための重要なサブ質問を作成してください。")])]
+                        
+                        question_resp = client.models.generate_content(
                             model=model_id,
                             contents=question_contents,
                             config=types.GenerateContentConfig(
@@ -3055,11 +3059,11 @@ function copyToClipboard(elementId) {{
                 # --- ユーザープロファイルの自動更新 & 自動提案 ---
                 try:
                     status_container.write("ユーザープロファイルを更新中...")
-                    client_for_extras = get_client()
+                    # client already initialized at startup
                     
                     # プロファイル更新
                     updated_profile, profile_usage = update_user_profile_from_conversation(
-                        client_for_extras, prompt, final_answer
+                        client, prompt, final_answer
                     )
                     save_user_profile(updated_profile)
                     
