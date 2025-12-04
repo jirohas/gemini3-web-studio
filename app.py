@@ -502,9 +502,24 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
             "実際にWebを閲覧したかのような断定的表現（「公式サイトを確認したところ〜」など）は避けてください。\n"
         )
     
+    
+    # Phase A: モデル役割特化
+    role_specialization = """
+【あなたの専門役割】
+・エッジな視点、カウンター意見、皮肉な見方を提供する専門家
+・主流の意見に対する「待った」を入れる役割
+・X/Twitter的な鋭い指摘や炎上リスクの検出
+
+【他のモデルに任せること】
+・Web検索や長文要約 → Gemini
+・構造的リスク分析 → Claude 4.5
+・テストケース列挙 → o4-mini
+"""
+    
     if mode == "full_max":
         user_content = (
-            f"ユーザーの質問:\n{user_question}\n\n"
+            role_specialization +
+            f"\nユーザーの質問:\n{user_question}\n\n"
             f"調査メモ:\n{research_text}\n\n"
             "指示:\n"
             "あなたは別視点のリード研究者です。\n"
@@ -515,7 +530,8 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
         )
     else:
         user_content = (
-            f"ユーザーの質問:\n{user_question}\n\n"
+            role_specialization +
+            f"\nユーザーの質問:\n{user_question}\n\n"
             f"調査メモ:\n{research_text}\n\n"
             "指示:\n"
             "調査メモを元に、「他のモデルが見落としそうな視点・リスク」を3〜5個、箇条書きで出してください。\n"
@@ -536,7 +552,7 @@ def think_with_grok(user_question: str, research_text: str, enable_x_search: boo
         "messages": [
             {"role": "user", "content": user_content}
         ],
-        "temperature": 0.7,
+        "temperature": 0.8,  # Phase A: エッジな視点・カウンター意見を出しやすく
         "max_tokens": 2000,
         # Nova 2 Lite など reasoning 対応モデルならここで有効化も可能：
         # "reasoning": {"effort": "medium"},
@@ -1942,7 +1958,7 @@ function copyToClipboard(elementId) {{
                 # =========================
                 if not enable_research:
                     config = types.GenerateContentConfig(
-                        temperature=0.7,
+                        temperature=0.8,  # Phase A: アイデア出しフェーズ - 多様性重視
                         candidate_count=1,
                         tools=tools,
                         system_instruction=base_system_instruction,
@@ -2427,7 +2443,7 @@ function copyToClipboard(elementId) {{
                     ]
                     
                     synthesis_config = types.GenerateContentConfig(
-                        temperature=0.3,
+                        temperature=0.4,  # Phase A: 統合時の柔軟性向上
                         candidate_count=1,
                         tools=[],  # 統合フェーズでは検索OFF
                         system_instruction=deep_instruction,
@@ -2689,7 +2705,7 @@ AI: {final_answer[:500]}
                     suggestion_resp = client_for_extras.models.generate_content(
                         model="gemini-2.5-flash",
                         contents=[{"role": "user", "parts": [{"text": suggestion_prompt}]}],
-                        config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=256)
+                        config=types.GenerateContentConfig(temperature=0.6, max_output_tokens=256)  # Phase A: 質問の一貫性向上
                     )
                     
                     # 出力を整形してから追加
