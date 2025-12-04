@@ -321,20 +321,98 @@ JSONのみを出力し、マークダウンや説明文を含めないでくだ�
                 risk_summary = parts[2] if len(parts) > 2 else text[len(text)//2:]
             else:
                 mid = len(text) // 2
-                fact_summary = text[:mid]
-                risk_summary = text[mid:]
-            
-            return fact_summary.strip(), risk_summary.strip(), usage_dict
+                fact_summary = text[:len(text)//2]
+            risk_summary = text[len(text)//2:]
+            return fact_summary, risk_summary, usage_dict
             
     except Exception as e:
-        # エラー時は元のテキストを半分に分割
-        mid = len(research_text) // 2
-        return research_text[:mid], research_text[mid:], {"prompt_tokens": 0, "output_tokens": 0}
+        # エラー時は空の結果を返す
+        return "事実抽出エラー", "リスク抽出エラー", {"prompt_tokens": 0, "output_tokens": 0}
+
+
+# ========================================
+# Phase B: JSON IR Extraction (v2)
+# ========================================
+
+def extract_facts_and_risks_v2(
+    client,
+    model_id: str,
+    user_question: str,
+    research_text: str
+) -> tuple:
+    """
+    Extract structured JSON IR from research text (Phase B Week 1).
+    
+    Returns: (ir_dict or None, usage_dict, raw_json_text)
+    """
+    try:
+        from research_ir import validate_research_ir
+        from datetime import datetime
+        import json
+        import re
+        
+        extraction_prompt = f"""以下の調査メモから、構造化情報を抽出してJSON形式で出力してください。
+
+【調査メモ】
+{research_text[:3000]}
+
+【出力形式】JSONのみ出力（説明不要）:
+{{
+  "facts": [{{"statement": "事実", "source": "web/youtube/model", "source_detail": "URL等", "date": "YYYY-MM-DD or null", "confidence": "high/medium/low"}}],
+  "options": [{{"name": "案名", "pros": ["利点"], "cons": ["欠点"], "conditions": ["条件"], "estimated_cost": null}}],
+  "risks": [{{"statement": "リスク", "severity": "high/medium/low", "timeframe": "short/medium/long", "mitigation": null}}],
+  "unknowns": [{{"question": "不明点", "why_unknown": "insufficient_data/conflicting_data/grey_area/future_dependent", "impact": "high/medium/low"}}],
+  "metadata": {{"question": "{user_question[:100]}", "language": "ja", "created_at": "{datetime.now().isoformat()}", "models": ["{model_id}"], "sources_count": 1, "search_queries": []}}
+}}
+
+制約: 該当なしは空配列[]、confidence判定（high=公式/複数ソース、medium=単一、low=推測）"""
+
+        config = types.GenerateContentConfig(
+            temperature=0.1,
+            response_mime_type="application/json"
+        )
+        
+        response = client.models.generate_content(
+            model=model_id,
+            contents=[{"role": "user", "parts": [{"text": extraction_prompt}]}],
+            config=config
+        )
+        
+        raw_text = extract_text_from_response(response).strip()
+        usage_dict = {
+            "prompt_tokens": response.usage_metadata.prompt_token_count or 0,
+            "output_tokens": response.usage_metadata.candidates_token_count or 0,
+        } if response.usage_metadata else {"prompt_tokens": 0, "output_tokens": 0}
+        
+        # Remove code blocks
+        json_text = re.sub(r'```json\s*|\s*```', '', raw_text)
+        
+        # Parse JSON
+        ir_dict = json.loads(json_text)
+        
+        # Validate
+        normalized_ir, warnings = validate_research_ir(ir_dict)
+        
+        return (normalized_ir, usage_dict, raw_text)
+        
+    except Exception as e:
+        print(f"[DEBUG] extract_facts_and_risks_v2 failed: {e}")
+        return (None, {"prompt_tokens": 0, "output_tokens": 0}, str(e))
+
+
+# =========================
+# Gemini Client Setup
+# =========================
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    st.error("Google Generative AI package not found. Please install: pip install google-generativeai")
+    st.stop()
 
 
 def build_session_memory(sessions: list, current_session_id: str, max_entries: int = 10) -> str:
     """
-    過去セッションから重要な文脈を抽出
     
     Args:
         sessions: すべてのセッション
