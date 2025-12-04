@@ -2166,11 +2166,18 @@ if stop_generation:
 prompt = st.chat_input("何か聞いてください...")
 
 if prompt:
+    # Debug: Show that input was received
+    st.write(f"🔍 DEBUG: Prompt received: {prompt[:50]}...")
+    st.write(f"🔍 DEBUG: Client is None? {client is None}")
+    st.write(f"🔍 DEBUG: stop_generation? {stop_generation}")
+    
     # Budget check at submission time
     if stop_generation:
         st.error("❌ コスト上限に達しているため、この実行はキャンセルしました。予算設定を見直してください。")
         st.info(f"現在: ${usage_stats['total_cost_usd']:.4f} / 上限: ${MAX_BUDGET_USD:.2f}")
         st.stop()
+    
+    st.write("🔍 DEBUG: Passed budget check, starting processing...")
     
     # Existing processing continues below...
         # ---- ユーザー発言表示 ----
