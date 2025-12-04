@@ -2206,18 +2206,18 @@ function copyToClipboard(elementId) {{
 }}
 </script>
 """, unsafe_allow_html=True)
-            if uploaded_files:
-                for uf in uploaded_files:
-                    st.caption(f"📎 添付: {uf.name}")
-            if youtube_url:
-                st.caption(f"📺 YouTube: {youtube_url}")
-            if pasted_image_bytes:
-                st.caption("📋 画像が貼り付けられました")
+        if uploaded_files:
+            for uf in uploaded_files:
+                st.caption(f"📎 添付: {uf.name}")
+        if youtube_url:
+            st.caption(f"📺 YouTube: {youtube_url}")
+        if pasted_image_bytes:
+            st.caption("📋 画像が貼り付けられました")
 
-        messages.append({
-            "role": "user",
-            "content": prompt,
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    messages.append({
+        "role": "user",
+        "content": prompt,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
         update_current_session_messages(messages)
 
