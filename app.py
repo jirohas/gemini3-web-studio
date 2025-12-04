@@ -341,7 +341,7 @@ def extract_facts_and_risks_v2(
     research_text: str
 ) -> tuple:
     """
-    Extract structured JSON IR from research text (Phase B Week 1).
+    Extract structured JSON IR from research text (Phase B).
     
     Returns: (ir_dict or None, usage_dict, raw_json_text)
     """
@@ -351,24 +351,76 @@ def extract_facts_and_risks_v2(
         import json
         import re
         
-        extraction_prompt = f"""以下の調査メモから、構造化情報を抽出してJSON形式で出力してください。
+        # Truncate research_text if too long
+        truncated_research = research_text[:4000] if len(research_text) > 4000 else research_text
+        
+        extraction_prompt = f"""以下の調査メモから、構造化された情報を抽出してJSON形式で出力してください。
 
 【調査メモ】
-{research_text[:3000]}
+{truncated_research}
 
-【出力形式】JSONのみ出力（説明不要）:
+【タスク】
+以下のJSON形式**のみ**を出力してください。説明文や前置きは不要です。
+
 {{
-  "facts": [{{"statement": "事実", "source": "web/youtube/model", "source_detail": "URL等", "date": "YYYY-MM-DD or null", "confidence": "high/medium/low"}}],
-  "options": [{{"name": "案名", "pros": ["利点"], "cons": ["欠点"], "conditions": ["条件"], "estimated_cost": null}}],
-  "risks": [{{"statement": "リスク", "severity": "high/medium/low", "timeframe": "short/medium/long", "mitigation": null}}],
-  "unknowns": [{{"question": "不明点", "why_unknown": "insufficient_data/conflicting_data/grey_area/future_dependent", "impact": "high/medium/low"}}],
-  "metadata": {{"question": "{user_question[:100]}", "language": "ja", "created_at": "{datetime.now().isoformat()}", "models": ["{model_id}"], "sources_count": 1, "search_queries": []}}
+  "facts": [
+    {{
+      "statement": "具体的な事実の記述",
+      "source": "web",
+      "source_detail": "URLまたは出典先",
+      "date": "2024-12-04",
+      "confidence": "high"
+    }}
+  ],
+  "options": [
+    {{
+      "name": "選択肢・案の名前",
+      "pros": ["メリット1", "メリット2"],
+      "cons": ["デメリット1"],
+      "conditions": ["成立条件1"],
+      "estimated_cost": null
+    }}
+  ],
+  "risks": [
+    {{
+      "statement": "リスクの内容",
+      "severity": "high",
+      "timeframe": "short",
+      "mitigation": "対策案（あれば）"
+    }}
+  ],
+  "unknowns": [
+    {{
+      "question": "不明な点・要確認事項",
+      "why_unknown": "insufficient_data",
+      "impact": "high"
+    }}
+  ],
+  "metadata": {{
+    "question": "{user_question[:150]}",
+    "language": "ja",
+    "created_at": "{datetime.now().isoformat()}",
+    "models": ["{model_id}"],
+    "sources_count": 1,
+    "search_queries": []
+  }}
 }}
 
-制約: 該当なしは空配列[]、confidence判定（high=公式/複数ソース、medium=単一、low=推測）"""
+【重要な制約】
+1. source は "web", "youtube", "model" のいずれか
+2. confidence は "high", "medium", "low" のいずれか
+   - high: 公式情報または複数ソースで確認
+   - medium: 単一ソースまたは間接情報
+   - low: 推測または古い情報
+3. severity/impact は "high", "medium", "low" のいずれか
+4. timeframe は "short", "medium", "long" のいずれか
+5. why_unknown は "insufficient_data", "conflicting_data", "grey_area", "future_dependent" のいずれか
+6. 該当項目がない場合は空配列 [] を使用
+7. JSONのみを出力（コードブロックや説明文は不要）
+"""
 
         config = types.GenerateContentConfig(
-            temperature=0.1,
+            temperature=0.1,  # 事実抽出は低温度
             response_mime_type="application/json"
         )
         
@@ -384,20 +436,98 @@ def extract_facts_and_risks_v2(
             "output_tokens": response.usage_metadata.candidates_token_count or 0,
         } if response.usage_metadata else {"prompt_tokens": 0, "output_tokens": 0}
         
-        # Remove code blocks
+        # Remove code blocks if present
         json_text = re.sub(r'```json\s*|\s*```', '', raw_text)
         
-        # Parse JSON
-        ir_dict = json.loads(json_text)
+        # Parse JSON with retry
+        ir_dict = None
+        for attempt in range(2):
+            try:
+                ir_dict = json.loads(json_text)
+                break
+            except json.JSONDecodeError as e:
+                if attempt == 0:
+                    # Try to fix common issues
+                    json_text = json_text.replace("'", '"')  # Single to double quotes
+                    json_text = re.sub(r',\s*}', '}', json_text)  # Remove trailing commas
+                    json_text = re.sub(r',\s*]', ']', json_text)
+                else:
+                    print(f"[DEBUG] JSON parse failed after retry: {e}")
+                    return (None, usage_dict, raw_text)
         
-        # Validate
+        if ir_dict is None:
+            return (None, usage_dict, raw_text)
+        
+        # Validate and normalize
         normalized_ir, warnings = validate_research_ir(ir_dict)
+        
+        if warnings:
+            print(f"[DEBUG] IR validation warnings: {warnings}")
         
         return (normalized_ir, usage_dict, raw_text)
         
     except Exception as e:
-        print(f"[DEBUG] extract_facts_and_risks_v2 failed: {e}")
+        print(f"[DEBUG] extract_facts_and_risks_v2 exception: {e}")
+        import traceback
+        traceback.print_exc()
         return (None, {"prompt_tokens": 0, "output_tokens": 0}, str(e))
+
+
+def convert_ir_to_markdown(ir: dict) -> tuple[str, str]:
+    """
+    Convert JSON IR to Markdown format for backward compatibility.
+    
+    Args:
+        ir: ResearchIR dictionary
+    
+    Returns:
+        Tuple of (fact_summary, risk_summary)
+    """
+    from research_ir import build_synthesis_prompt_from_ir
+    
+    # Facts section
+    fact_lines = ["## 📊 事実"]
+    confidence_marks = {
+        "high": "✓",
+        "medium": "△",
+        "low": "?",
+        "unknown": "·"
+    }
+    
+    for fact in ir.get("facts", []):
+        mark = confidence_marks.get(fact.get("confidence", "unknown"), "·")
+        fact_lines.append(f"{mark} {fact.get('statement', '')}")
+        if fact.get("source_detail"):
+            fact_lines.append(f"  出典: {fact['source_detail']}")
+    
+    # Unknowns section
+    if ir.get("unknowns"):
+        fact_lines.append("\n### 不明点・要確認事項")
+        for unknown in ir["unknowns"]:
+            fact_lines.append(f"? {unknown.get('question', '')}")
+    
+    fact_summary = "\n".join(fact_lines) if fact_lines else "（抽出された事実なし）"
+    
+    # Risks section
+    risk_lines = ["## ⚠️ リスク・不確実性"]
+    severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢", "unknown": "⚪"}
+    
+    # Sort by severity
+    severity_order = {"high": 0, "medium": 1, "low": 2, "unknown": 3}
+    sorted_risks = sorted(
+        ir.get("risks", []),
+        key=lambda x: severity_order.get(x.get("severity", "unknown"), 3)
+    )
+    
+    for risk in sorted_risks:
+        emoji = severity_emoji.get(risk.get("severity", "unknown"), "⚪")
+        risk_lines.append(f"{emoji} {risk.get('statement', '')}")
+        if risk.get("mitigation"):
+            risk_lines.append(f"  対策: {risk['mitigation']}")
+    
+    risk_summary = "\n".join(risk_lines) if risk_lines else "（特定されたリスクなし）"
+    
+    return (fact_summary, risk_summary)
 
 
 # =========================
@@ -2228,19 +2358,54 @@ function copyToClipboard(elementId) {{
                         usage_stats["total_output_tokens"] += (research_resp.usage_metadata.candidates_token_count or 0)
                     
                     # --- Phase 1.3: 事実とリスクの抽出 (ms/Azモードのみ) ---
+                    # Phase B: JSON IR extraction with v1 fallback
                     fact_summary = ""
                     risk_summary = ""
+                    current_ir = None  # Store IR for Phase 2
                     is_ms_az_mode = "ms/Az" in response_mode
+                    
                     if is_ms_az_mode:  # ms/Azモードでのみ重いJSON抽出を実行
-                        status_container.write("Phase 1.3: 事実・リスク抽出中...")
-                        fact_summary, risk_summary, phase13_usage = extract_facts_and_risks(
-                            client, model_id, research_text
-                        )
-                        status_container.write("✓ Phase 1.3完了")
-                        with status_container.expander("抽出された事実とリスク", expanded=False):
-                            st.markdown(f"{fact_summary}\n\n{risk_summary}")
+                        status_container.write("Phase 1.3: JSON IR抽出中...")
                         
-                        # コスト計算 (Phase 1.3) - usage_dictを使用して正確に
+                        # Try v2 extraction first
+                        ir, ir_usage, ir_raw_json = extract_facts_and_risks_v2(
+                            client=client,
+                            model_id=model_id,
+                            user_question=prompt,
+                            research_text=research_text
+                        )
+                        
+                        if ir is not None:
+                            # IR extraction succeeded
+                            current_ir = ir
+                            fact_summary, risk_summary = convert_ir_to_markdown(ir)
+                            phase13_usage = ir_usage
+                            status_container.write("✓ Phase 1.3完了 (JSON IR)")
+                            
+                            # Debug UI
+                            with status_container.expander("📊 抽出された事実とリスク (Phase B: JSON IR)", expanded=False):
+                                st.markdown(f"{fact_summary}\n\n{risk_summary}")
+                                
+                                st.markdown("---")
+                                st.markdown("### 🔍 デバッグ: JSON IR構造")
+                                st.json(ir)
+                                
+                                st.markdown("### 📄 生のJSON出力")
+                                st.code(ir_raw_json, language="json")
+                        
+                        else:
+                            # IR extraction failed - fallback to v1
+                            status_container.write("⚠️ IR抽出失敗 - v1にフォールバック中...")
+                            fact_summary, risk_summary, phase13_usage = extract_facts_and_risks(
+                                client, model_id, research_text
+                            )
+                            status_container.write("✓ Phase 1.3完了 (v1 fallback)")
+                            
+                            with status_container.expander("抽出された事実とリスク (v1 fallback)", expanded=False):
+                                st.markdown(f"{fact_summary}\n\n{risk_summary}")
+                                st.warning(f"IR抽出エラー: {ir_raw_json[:200]}")
+                        
+                        # コスト計算 (Phase 1.3)
                         phase13_cost = calculate_cost(
                             model_id,
                             phase13_usage["prompt_tokens"],
