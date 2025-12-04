@@ -2937,13 +2937,13 @@ function copyToClipboard(elementId) {{
                 if enable_strict:
                     processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
                     processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
-                        else:
-                            # Geminiのみの場合もモデル名を表示（多層モードの場合）
-                            if mode_category == "🎯 回答モード(多層)":
-                                final_answer = (
-                                    f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
-                                    f"**モード: {response_mode}**\n\n---\n\n{final_answer}"
-                                )
+                else: # This 'else' belongs to 'if use_grok_reviewer and OPENROUTER_API_KEY:'
+                    # Geminiのみの場合もモデル名を表示（多層モードの場合）
+                    if mode_category == "🎯 回答モード(多層)":
+                        final_answer = (
+                            f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
+                            f"**モード: {response_mode}**\n\n---\n\n{final_answer}"
+                        )
                         
                         # --- メタ思考モード: 結論を先出しする ---
                         if "メタ思考" in response_mode:
