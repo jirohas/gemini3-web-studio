@@ -2218,18 +2218,6 @@ function copyToClipboard(elementId) {{
         "role": "user",
         "content": prompt,
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-        update_current_session_messages(messages)
-
-        # ---- モデル応答 ----
-        with st.chat_message("assistant"):
-            status_container = st.status("思考中...", expanded=True)
-            try:
-                # 会話履歴
-                model_history = []
-                for msg in messages[:-1]:
-                    model_history.append(
-                        types.Content(
                             role=msg["role"],
                             parts=[types.Part.from_text(text=msg["content"])],
                         )
