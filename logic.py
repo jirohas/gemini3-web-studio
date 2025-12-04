@@ -25,8 +25,11 @@ SESSIONS_FILE = "chat_sessions.json"
 MANUAL_COST_FILE = "manual_cost.json"
 USER_PROFILE_FILE = "user_profile.json"
 USD_TO_JPY = float(os.getenv("USD_TO_JPY", "150.0"))
-MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "100.0"))
+
+# Increased budget limit for development
+MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "1000.0"))  # Increased from 100 to 1000
 MAX_BUDGET_JPY = MAX_BUDGET_USD * USD_TO_JPY
+
 TRIAL_LIMIT_USD = float(os.getenv("TRIAL_LIMIT_USD", "300.0"))
 TRIAL_LIMIT_JPY = TRIAL_LIMIT_USD * USD_TO_JPY
 TRIAL_EXPIRY = os.getenv("TRIAL_EXPIRY", "2026-02-28")
