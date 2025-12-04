@@ -1459,7 +1459,7 @@ with st.sidebar:
         # ボタンを縦に配置
         if st.button("✨ 提案 (直近)", use_container_width=True):
             with st.spinner("生成中..."):
-                client = get_client()
+                # client already initialized at startup
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
                 
@@ -1480,7 +1480,7 @@ with st.sidebar:
 
         if st.button("🔥 提案 (全履歴)", use_container_width=True):
             with st.spinner("全履歴分析中..."):
-                client = get_client()
+                # client already initialized at startup
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
                 
