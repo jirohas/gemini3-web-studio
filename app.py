@@ -1005,6 +1005,7 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
         # 思考ブロックと回答テキストの取り出し (reasoningContent対応)
         thinking_blocks = []
         text_chunks = []
+```
         output = resp.get("output", {})
         message = output.get("message", {})
         
