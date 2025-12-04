@@ -1916,25 +1916,39 @@ def get_gemini_client():
     ローカル開発: Application Default Credentials
     """
     try:
+        # Get project ID from secrets or environment variable
+        project_id = VERTEX_PROJECT
+        
         # Streamlit Cloud: Service Account via secrets
         if "GOOGLE_CREDENTIALS" in st.secrets:
             from google.oauth2 import service_account
             creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
+            
+            # Use project_id from credentials if VERTEX_PROJECT is not set
+            if not project_id:
+                project_id = creds_dict.get("project_id")
+            
             scoped_creds = service_account.Credentials.from_service_account_info(
                 creds_dict,
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
+            
+            print(f"[DEBUG] Initializing with project_id: {project_id}")
+            
             return genai.Client(
                 vertexai=True,
-                project=VERTEX_PROJECT,
+                project=project_id,
                 location=VERTEX_LOCATION,
                 credentials=scoped_creds
             )
         else:
             # Local development: Application Default Credentials
+            if not project_id:
+                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required for local development")
+            
             return genai.Client(
                 vertexai=True,
-                project=VERTEX_PROJECT,
+                project=project_id,
                 location=VERTEX_LOCATION,
             )
     except Exception as e:
