@@ -2362,16 +2362,9 @@ function copyToClipboard(elementId) {{
                         routing_status.update(label=f"✓ AUTO判定: {pipeline['routing_reason']}", state="complete")
                         
                     except Exception as e:
-                        # Fallback to safe default (medium research mode)
+                        st.error(f"ユーザープロファイルまたは自動提案の生成に失敗しました: {e}")
                         import traceback
                         traceback.print_exc()
-                        routing_status.update(label=f"⚠️ AUTO分析失敗、通常モードで処理: {str(e)[:80]}", state="error")
-                        enable_research = True
-                        enable_meta = False
-                        enable_strict = False
-                        enable_grok_x_search = False
-                else:
-                    # =========================
                     # Manual Mode Settings (従来通り)
                     # =========================
                     # β1通常モード以外はリサーチを実行
