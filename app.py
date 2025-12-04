@@ -2370,13 +2370,13 @@ function copyToClipboard(elementId) {{
                             "pipeline": pipeline
                         }
                         
-                        status_container.success(f"✓ AUTO判定: {pipeline['routing_reason']}")
+                        routing_status.update(label=f"✓ AUTO判定: {pipeline['routing_reason']}", state="complete")
                         
                     except Exception as e:
                         # Fallback to safe default (medium research mode)
                         import traceback
                         traceback.print_exc()
-                        status_container.warning(f"⚠️ AUTO分析失敗、通常モードで処理: {str(e)[:80]}")
+                        routing_status.update(label=f"⚠️ AUTO分析失敗、通常モードで処理: {str(e)[:80]}", state="error")
                         enable_research = True
                         enable_meta = False
                         enable_strict = False
