@@ -2532,11 +2532,7 @@ function copyToClipboard(elementId) {{
   4. 「予測が外れるとしたらどんなパターンか？」
 
 **出力**: 箇条書き（Q1, Q2...）のみ
-"""
-
-                        question_contents = [types.Content(role="user", parts=[types.Part(text=f"ユーザーの元の質問:\n{prompt}\n\n==== 調査メモ ====\n{research_text}\n==== 調査メモここまで ====\n\nこのテーマをさらに深掘りするための重要なサブ質問を作成してください。")])]
-                        
-                        question_resp = client.models.generate_content(
+```
                             model=model_id,
                             contents=question_contents,
                             config=types.GenerateContentConfig(
@@ -3096,7 +3092,7 @@ AI: {final_answer[:500]}
 - 質問文2？
 - 質問文3？
 """
-                    suggestion_resp = client_for_extras.models.generate_content(
+                    suggestion_resp = client.models.generate_content(
                         model="gemini-2.5-flash",
                         contents=[{"role": "user", "parts": [{"text": suggestion_prompt}]}],
                         config=types.GenerateContentConfig(temperature=0.6, max_output_tokens=256)  # Phase A: 質問の一貫性向上
