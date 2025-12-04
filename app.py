@@ -2923,8 +2923,8 @@ function copyToClipboard(elementId) {{
                         st.json(flags_display)
                 # ▲▲▲ Phase C: AUTO Routing Debug ここまで ▲▲▲
                 
-                                processing_history = []
-                                processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
+                processing_history = []
+                processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
                                 if enable_meta:
                                     processing_history.append("**Phase 1.5a**: Gemini メタ質問生成")
                                     if grok_status == "success":
