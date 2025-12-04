@@ -732,11 +732,27 @@ def think_with_claude45_bedrock(user_question: str, research_text: str) -> tuple
         "回答は簡潔に、箇条書きで出力してください。"
     )
 
+    
+    # Phase A: モデル役割特化
+    role_specialization = """
+【あなたの専門役割】
+・構造的リスク、システム的な問題点の発見
+・長期的なシナリオ分析（1年後、5年後の影響）
+・見落とされがちな前提条件や依存関係の指摘
+
+【あなたが重視すべきこと】
+・短期的な視点よりも、長期的・構造的な視点
+・「このアプローチが失敗する条件は？」
+・「スケールした時に何が壊れるか？」
+"""
+    
     user_content = (
-        f"ユーザーの質問:\n{user_question}\n\n"
+        role_specialization +
+        f"\nユーザーの質問:\n{user_question}\n\n"
         f"調査メモ:\n{research_text}\n\n"
         "指示:\n"
-        "調査メモを元に、あなた自身の視点で回答案を作成してください。"
+        "調査メモの内容を元に、長期的な視点で「リスク」「前提条件」「依存関係」を中心に\n"
+        "3〜5個の重要なポイントを箇条書きで書いてください。"
     )
 
     try:
@@ -840,11 +856,27 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
         "・連続する空行は1行までにしてください。"
     )
     
+    
+    # Phase A: モデル役割特化
+    role_specialization = """
+【あなたの専門役割】
+・テストケース、エッジケースの列挙
+・「◯◯の場合はどうなる？」というチェックリスト作成
+・実装上の落とし穴や細かい注意点の指摘
+
+【出力形式の推奨】
+・箇条書きのチェックリスト形式
+・「確認すべきこと」リスト
+・「想定すべきケース」リスト
+"""
+    
     user_content = (
-        f"ユーザーの質問:\n{user_question}\n\n"
-        f"調査メモ（要約版）:\n{research_text}\n\n"
+        role_specialization +
+        f"\nユーザーの質問:\n{user_question}\n\n"
+        f"調査メモ:\n{research_text}\n\n"
         "指示:\n"
-        "上記を踏まえ、「見落としそうなリスク・テストケース・反論」を最大5個まで箇条書きで出してください。"
+        "調査メモを元に、考慮すべき「テストケース」「エッジケース」「チェック項目」を\n"
+        "箇条書きで3〜7個出してください。"
     )
     
     headers = {
