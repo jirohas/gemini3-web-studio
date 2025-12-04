@@ -2937,23 +2937,6 @@ function copyToClipboard(elementId) {{
                 if enable_strict:
                     processing_history.append("**Phase 3**: Gemini 鬼軍曹レビュー")
                     processing_history.append(f"**Phase 3b**: {SECONDARY_MODEL_NAME} 最終レビュー ✓")
-                                
-                                # Grok使用時は、処理履歴+モデル名+2段構成で表示
-                                final_answer = (
-                                    "## 📊 処理履歴\n\n"
-                                    + "\n".join([f"- {item}" for item in processing_history])
-                                    + "\n\n---\n\n"
-                                    f"**🤖 使用モデル: {model_id} (Deep Thinking / High Reasoning)**\n"
-                                    f"**レビュア: {SECONDARY_MODEL_NAME} (OpenRouter)**\n"
-                                    f"**モード: {response_mode}**\n\n"
-                                    "---\n\n"
-                                    "## ✅ 最終回答（Gemini統合版）\n\n"
-                                    f"{final_answer}\n\n"
-                                    "---\n\n"
-                                    f"## 🔍 {SECONDARY_MODEL_NAME} によるレビュー\n\n"
-                                    f"{grok_answer}"
-                                )
-                                status_container.write(f"✓ {SECONDARY_MODEL_NAME}最終レビュー完了")
                         else:
                             # Geminiのみの場合もモデル名を表示（多層モードの場合）
                             if mode_category == "🎯 回答モード(多層)":
