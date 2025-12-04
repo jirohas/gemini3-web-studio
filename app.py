@@ -1960,11 +1960,33 @@ def get_gemini_client():
 # Initialize client
 client = get_gemini_client()
 
+# Store initialization error for display
+init_error = None
+if client is None:
+    # Try to get the actual error message
+    try:
+        import sys
+        # Re-run to capture exception
+        test_client = get_gemini_client()
+    except Exception as e:
+        init_error = str(e)
+
 # Check if client is ready
 if client is None:
     st.error("❌ Gemini API初期化に失敗しました")
+    if init_error:
+        st.error(f"**エラー詳細:** {init_error}")
     st.info("💡 Streamlit Cloudの場合: 「Manage app」→「Settings」→「Secrets」で`GOOGLE_CREDENTIALS`を設定してください")
     st.info("💡 ローカル開発の場合: `gcloud auth application-default login`を実行してください")
+    
+    # Show debug info
+    with st.expander("🔍 デバッグ情報", expanded=True):
+        st.code(f"VERTEX_PROJECT = {VERTEX_PROJECT}")
+        st.code(f"VERTEX_LOCATION = {VERTEX_LOCATION}")
+        st.code(f"Has GOOGLE_CREDENTIALS in secrets = {'GOOGLE_CREDENTIALS' in st.secrets}")
+        if "GOOGLE_CREDENTIALS" in st.secrets:
+            creds = dict(st.secrets["GOOGLE_CREDENTIALS"])
+            st.code(f"project_id in credentials = {creds.get('project_id')}")
     st.stop()
 
 # ---- 履歴表示 ----
