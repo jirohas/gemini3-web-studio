@@ -2354,17 +2354,6 @@ function copyToClipboard(elementId) {{
                             user_question=prompt,
                             user_profile=st.session_state.get("user_profile")
                         )
-                        
-                        # Determine pipeline
-                        pipeline = route_question_to_pipeline(classification)
-                        
-                        # Override flags based on routing
-                        enable_research = pipeline["enable_research"]
-                        enable_meta = pipeline["enable_meta"]
-                        enable_strict = pipeline["enable_strict"]
-                        enable_grok_x_search = pipeline.get("use_x_search", False)
-                        
-                        # Store routing info for debug display
                         routing_info = {
                             "classification": classification,
                             "pipeline": pipeline
