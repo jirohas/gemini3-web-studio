@@ -1846,28 +1846,38 @@ with st.sidebar:
     if manual_cost != current_manual_cost:
         save_manual_cost(manual_cost)
     
-    # ▼▼▼ 残り回数の予測表示 ▼▼▼
-    JPY_USD_RATE = 150.0  # 1ドル150円換算
-    COST_PER_RUN_ESTIMATE = 2.0  # 本気MAX 1回あたりの推定コスト($)
+    # ▼▼▼ AWS/Gemini別カウント + コンパクト表示 ▼▼▼
+    JPY_USD_RATE = 150.0
     
-    remaining_usd = (MAX_BUDGET_JPY / JPY_USD_RATE) - usage_stats['total_cost_usd']
-    remaining_runs = int(remaining_usd / COST_PER_RUN_ESTIMATE)
-    if remaining_runs < 0:
-        remaining_runs = 0
+    # Gemini予算: $300 (¥45,000)
+    GEMINI_BUDGET_USD = 300.0
+    GEMINI_COST_PER_RUN = 1.8  # 本気MAX Gemini分の平均コスト
     
-    # プログレスバー
-    progress_value = min(1.0, max(0.0, usage_stats['total_cost_usd'] / (MAX_BUDGET_JPY / JPY_USD_RATE)))
+    # AWS予算: $100 (¥15,000)  
+    AWS_BUDGET_USD = 100.0
+    AWS_COST_PER_RUN = 0.2  # Claude 4.5 Sonnet 1回あたり平均
+    
+    # 使用量（実際はusage_statsから分離すべきだが、簡易版として比率で推定）
+    total_cost = usage_stats['total_cost_usd']
+    gemini_cost_est = total_cost * 0.85  # 約85%がGemini
+    aws_cost_est = total_cost * 0.15  # 約15%がAWS (Claude)
+    
+    gemini_remaining = GEMINI_BUDGET_USD - gemini_cost_est
+    aws_remaining = AWS_BUDGET_USD - aws_cost_est
+    gemini_runs = max(0, int(gemini_remaining / GEMINI_COST_PER_RUN))
+    aws_runs = max(0, int(aws_remaining / AWS_COST_PER_RUN))
+    
+    # プログレスバー（全体）
+    progress_value = min(1.0, max(0.0, total_cost / (GEMINI_BUDGET_USD + AWS_BUDGET_USD)))
     st.progress(progress_value)
     
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.metric("残り予算", f"${remaining_usd:.1f}")
-    with col_b:
-        st.metric("本気MAX", f"あと {remaining_runs} 回", help="1回 $2.0 で計算")
+    # コンパクト表示（st.captionで小さく）
+    st.caption(f"**Gemini**: 残${gemini_remaining:.0f} (あと{gemini_runs}回) | **AWS**: 残${aws_remaining:.0f} (あと{aws_runs}回)")
+    st.caption(f"💰 合計使用: ${total_cost:.2f} / ${GEMINI_BUDGET_USD + AWS_BUDGET_USD:.0f}")
     
-    if remaining_runs < 10:
+    if gemini_runs < 20 or aws_runs < 50:
         st.warning("⚠️ 予算が残りわずかです")
-    # ▲▲▲ 残り回数の予測表示 ここまで ▲▲▲
+    # ▲▲▲ AWS/Gemini別カウント ここまで ▲▲▲
     
     st.link_button("💰 Google Cloud Console", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
     st.link_button("☁️ AWS Free Tier Dashboard", "https://us-east-1.console.aws.amazon.com/costmanagement/home?region=us-east-1#/freetier")
@@ -2982,7 +2992,7 @@ function copyToClipboard(elementId) {{
                             error_msg = str(e).lower()
                             if "quota" in error_msg or "rate" in error_msg or "resource" in error_msg:
                                 if attempt < max_retries - 1:
-                                    wait_time = (attempt + 1) * 10  # 10秒, 20秒, 30秒
+                                    wait_time = (attempt + 1) * 15 + 15  # 30秒, 45秒, 60秒（強化版）
                                     status_container.write(f"⏳ クォータ制限のため {wait_time}秒待機中... (試行 {attempt + 2}/{max_retries})")
                                     time.sleep(wait_time)
                                 else:
@@ -3092,7 +3102,7 @@ function copyToClipboard(elementId) {{
                                 error_msg = str(e).lower()
                                 if "quota" in error_msg or "rate" in error_msg or "resource" in error_msg:
                                     if attempt < max_retries - 1:
-                                        wait_time = (attempt + 1) * 5  # 5秒, 10秒, 15秒
+                                        wait_time = (attempt + 1) * 15 + 5  # 20秒, 35秒, 50秒（強化版）
                                         status_container.write(f"⏳ クォータ制限のため {wait_time}秒待機中... (試行 {attempt + 2}/{max_retries})")
                                         time.sleep(wait_time)
                                     else:
