@@ -2074,6 +2074,31 @@ for idx, msg in enumerate(messages):
                     st.caption("✅ 高評価")
                 elif current_rating == -1:
                     st.caption("❌ 低評価")
+            
+            # ▼▼▼ Deep Log: 保存された推論プロセスの表示 ▼▼▼
+            if "reasoning_logs" in msg and msg["reasoning_logs"]:
+                with st.expander("🧠 推論プロセス (Deep Log)", expanded=False):
+                    logs = msg["reasoning_logs"]
+                    
+                    # メタデータ表示
+                    if "metadata" in msg:
+                        meta = msg["metadata"]
+                        st.caption(f"🤖 Model: {meta.get('model', 'N/A')} | 💰 Cost: ${meta.get('cost', 0):.4f}")
+                    
+                    if logs.get("phase1_research"):
+                        st.markdown("### 📚 Phase 1: 調査メモ")
+                        st.markdown(logs["phase1_research"][:2000] + "..." if len(logs.get("phase1_research", "")) > 2000 else logs["phase1_research"])
+                        st.markdown("---")
+                    
+                    if logs.get("phase1_5b_secondary"):
+                        st.markdown(f"### ⚡ Phase 1.5b: セカンダリモデルの視点")
+                        st.markdown(logs["phase1_5b_secondary"][:1500] + "..." if len(logs.get("phase1_5b_secondary", "")) > 1500 else logs["phase1_5b_secondary"])
+                        st.markdown("---")
+                    
+                    if logs.get("phase1_5d_claude"):
+                        st.markdown("### 🧠 Phase 1.5d: Claude 4.5 Sonnet の視点")
+                        st.markdown(logs["phase1_5d_claude"][:1500] + "..." if len(logs.get("phase1_5d_claude", "")) > 1500 else logs["phase1_5d_claude"])
+            # ▲▲▲ Deep Log ここまで ▲▲▲
 
 # スクロールボタン（長いチャット用）
 if len(messages) > 5:
@@ -3427,11 +3452,35 @@ function copyToClipboard(elementId) {{
                                 st.markdown(f"{i}. **[{info['title']}]({uri})**")
                                 st.caption(f"   出典: {info['domain']}")
 
+                # ▼▼▼ Deep Log: 推論プロセスを保存（確実性向上） ▼▼▼
+                reasoning_logs = {
+                    "phase1_research": research_text if 'research_text' in dir() else None,
+                    "phase1_5_meta_questions": questions_text if 'questions_text' in dir() else None,
+                    "phase1_5b_secondary": grok_thought if 'grok_thought' in dir() else None,
+                    "phase1_5d_claude": claude45_thought if 'claude45_thought' in dir() else None,
+                    "phase1_5e_o4mini": o4mini_thought if 'o4mini_thought' in dir() else None,
+                    "phase2_draft": draft_answer if 'draft_answer' in dir() else None,
+                }
+                
+                # 情報源URLを抽出
+                grounding_sources = []
+                if grounding_metadata and hasattr(grounding_metadata, 'grounding_chunks'):
+                    for chunk in grounding_metadata.grounding_chunks:
+                        if hasattr(chunk, 'web') and hasattr(chunk.web, 'uri'):
+                            grounding_sources.append(chunk.web.uri)
+                
                 messages.append({
                     "role": "model",
-                    "content": final_answer_with_history,  # 処理履歴込みで保存
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "content": final_answer_with_history,
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "reasoning_logs": reasoning_logs,  # Deep Log
+                    "metadata": {
+                        "model": model_id,
+                        "cost": round(st.session_state.session_cost, 4),
+                        "sources": grounding_sources[:10]  # 最大10件
+                    }
                 })
+                # ▲▲▲ Deep Log ここまで ▲▲▲
                 update_current_session_messages(messages)
 
             except Exception as e:
