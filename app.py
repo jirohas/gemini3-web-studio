@@ -2900,15 +2900,38 @@ function copyToClipboard(elementId) {{
                         ),
                     )
                     
-                    synthesis_resp = client.models.generate_content(
-                        model=model_id,
-                        contents=synthesis_contents,
-                        config=synthesis_config,
-                    )
+                    # Phase 2 リトライ機能（クォータエラー対策）
+                    import time
+                    max_retries = 3
+                    draft_answer = None
+                    synthesis_resp = None
                     
-                    draft_answer = extract_text_from_response(synthesis_resp)
+                    for attempt in range(max_retries):
+                        try:
+                            synthesis_resp = client.models.generate_content(
+                                model=model_id,
+                                contents=synthesis_contents,
+                                config=synthesis_config,
+                            )
+                            draft_answer = extract_text_from_response(synthesis_resp)
+                            status_container.write("✓ 統合完了")
+                            break
+                        except Exception as e:
+                            error_msg = str(e).lower()
+                            if "quota" in error_msg or "rate" in error_msg or "resource" in error_msg:
+                                if attempt < max_retries - 1:
+                                    wait_time = (attempt + 1) * 10  # 10秒, 20秒, 30秒
+                                    status_container.write(f"⏳ クォータ制限のため {wait_time}秒待機中... (試行 {attempt + 2}/{max_retries})")
+                                    time.sleep(wait_time)
+                                else:
+                                    status_container.warning("⚠️ Phase 2: クォータ制限により断念。リサーチ結果のサマリーを表示します。")
+                                    # フォールバック: リサーチ結果の要約を回答として使用
+                                    draft_answer = f"**⚠️ 統合フェーズがクォータ制限により中断されました**\n\n### 収集した情報（Phase 1）:\n\n{research_text[:3000]}..."
+                            else:
+                                raise e
                     
-                    status_container.write("✓ 統合完了")
+                    if draft_answer is None:
+                        draft_answer = f"**⚠️ Phase 2エラー**\n\n{research_text[:2000]}..."
                     
                     # コスト計算 (Phase 2)
                     if synthesis_resp.usage_metadata:
