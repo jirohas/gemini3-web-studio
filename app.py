@@ -353,6 +353,26 @@ def trim_history(messages: list, max_tokens: int = 25000) -> list:
     
     return trimmed
 
+def parse_thinking(text: str) -> tuple[str, str]:
+    """
+    思考プロセス（<thinking>タグ）を回答から分離
+    GPT 5.1 Pro/Claude 4.5のThinking Process機能を実装
+    
+    Args:
+        text: LLMの生の回答テキスト
+    
+    Returns:
+        (thinking_content, main_content) - 思考部分と本文
+    """
+    import re
+    pattern = r"<thinking>(.*?)</thinking>"
+    match = re.search(pattern, text, re.DOTALL)
+    if match:
+        thinking = match.group(1).strip()
+        content = re.sub(pattern, "", text, flags=re.DOTALL).strip()
+        return thinking, content
+    return None, text
+
 def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple[str, str, dict]:
     """
     Phase B以前の後方互換用（v1）：事実とリスクをMarkdown形式で抽出
