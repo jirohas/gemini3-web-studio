@@ -2049,6 +2049,9 @@ if client is None:
 
 # ---- 履歴表示 ----
 
+# チャット先頭にアンカーを設置
+st.markdown('<a id="chat-top"></a>', unsafe_allow_html=True)
+
 messages = get_current_messages()
 for idx, msg in enumerate(messages):
     with st.chat_message(msg["role"]):
@@ -2100,41 +2103,16 @@ for idx, msg in enumerate(messages):
                         st.markdown(logs["phase1_5d_claude"][:1500] + "..." if len(logs.get("phase1_5d_claude", "")) > 1500 else logs["phase1_5d_claude"])
             # ▲▲▲ Deep Log ここまで ▲▲▲
 
-# スクロールボタン（長いチャット用）- Streamlit iframe対応版
+# チャット末尾にアンカー設置 + ナビゲーションリンク
+st.markdown('<a id="chat-bottom"></a>', unsafe_allow_html=True)
+
+# ナビゲーションリンク（長いチャット用）
 if len(messages) > 5:
-    st.markdown("""
-    <script>
-    function scrollToTop() {
-        // Streamlitのメインコンテンツ領域をスクロール
-        const mainContent = window.parent.document.querySelector('section.main');
-        if (mainContent) {
-            mainContent.scrollTo({top: 0, behavior: 'smooth'});
-        } else {
-            window.parent.scrollTo({top: 0, behavior: 'smooth'});
-        }
-    }
-    function scrollToBottom() {
-        const mainContent = window.parent.document.querySelector('section.main');
-        if (mainContent) {
-            mainContent.scrollTo({top: mainContent.scrollHeight, behavior: 'smooth'});
-        } else {
-            window.parent.scrollTo({top: window.parent.document.body.scrollHeight, behavior: 'smooth'});
-        }
-    }
-    </script>
-    <div style="position: fixed; right: 20px; bottom: 100px; z-index: 9999;">
-        <button onclick="scrollToTop()" 
-                style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
-                       border: 2px solid #666; border-radius: 50%; background: #333; color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
-            ⬆️
-        </button>
-        <button onclick="scrollToBottom()" 
-                style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
-                       border: 2px solid #666; border-radius: 50%; background: #333; color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
-            ⬇️
-        </button>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        st.markdown('[⬆️ チャット先頭へ](#chat-top)', unsafe_allow_html=True)
+    with col3:
+        st.markdown('[⬇️ 最新へ](#chat-bottom)', unsafe_allow_html=True)
 
 
 # =========================
