@@ -1242,9 +1242,21 @@ def switch_session(session_id):
     st.rerun()
 
 def update_current_session_messages(messages):
+    """
+    履歴安定化版: session_stateをマスターとして扱い、ファイルは保存のみ
+    ❌ 修正前: load_sessions()で毎回ファイルから読み込み → 先祖返り発生
+    ⭕ 修正後: session_stateを直接更新 → ファイルはバックアップとして保存
+    """
     if st.session_state.current_session_id:
-        current_sessions = load_sessions()
+        # ❌ 削除: current_sessions = load_sessions()  ← これが先祖返りの原因
+        
+        # ⭕ session_stateをマスターとして使用
+        if "sessions" not in st.session_state or not st.session_state.sessions:
+            st.session_state.sessions = load_sessions()  # 起動時のみ
+        
+        current_sessions = st.session_state.sessions
         target_index = -1
+        
         for i, session in enumerate(current_sessions):
             if session["id"] == st.session_state.current_session_id:
                 session["messages"] = messages
@@ -1259,9 +1271,12 @@ def update_current_session_messages(messages):
             # 最新のセッションをリストの先頭に移動
             updated_session = current_sessions.pop(target_index)
             current_sessions.insert(0, updated_session)
-            
-        save_sessions(current_sessions)
+        
+        # 1. メモリを即時更新（これで画面上の表示は安定する）
         st.session_state.sessions = current_sessions
+        
+        # 2. ファイルへ保存（バックアップ）
+        save_sessions(current_sessions)
 
 def get_current_messages():
     if st.session_state.current_session_id:
