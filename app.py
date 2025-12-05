@@ -1843,9 +1843,9 @@ with st.sidebar:
         openrouter_ok = bool(OPENROUTER_API_KEY and OPENROUTER_API_KEY.strip())
         github_ok = bool(GITHUB_TOKEN and GITHUB_TOKEN.strip())
         
-        st.caption(f"AWS: {'✅' if aws_ok else '❌'} (len: {len(AWS_ACCESS_KEY_ID) if AWS_ACCESS_KEY_ID else 0})")
-        st.caption(f"OpenRouter: {'✅' if openrouter_ok else '❌'} (len: {len(OPENROUTER_API_KEY) if OPENROUTER_API_KEY else 0})")
-        st.caption(f"GitHub: {'✅' if github_ok else '❌'} (len: {len(GITHUB_TOKEN) if GITHUB_TOKEN else 0})")
+        st.caption(f"AWS: {'✅' if aws_ok else '❌'}")
+        st.caption(f"OpenRouter: {'✅' if openrouter_ok else '❌'}")
+        st.caption(f"GitHub: {'✅' if github_ok else '❌'}")
         
         # Secrets詳細デバッグ
         st.caption("---")
@@ -3175,29 +3175,28 @@ function copyToClipboard(elementId) {{
                     # --- 回答末尾への自動提案 (Phase 3-A) ---
                     status_container.write("次の質問を提案中...")
                     suggestion_prompt = f"""
-以下の会話の続きとして、ユーザーが次に聞くと有益な「次の質問」を3つ提案してください。
+以下の会話の続きとして、ユーザーが次に深掘りすべき「価値ある質問」を3つ提案してください。
 ユーザーのプロファイル（興味関心）: {updated_profile.get('interests', [])}
 
-【直前の会話（要約用）】
-User: {prompt[:500]}
-AI: {final_answer[:500]}
+【直前の会話】
+User: {prompt[:800]}
+AI: {final_answer[:1000]}
 
-【厳守ルール】
-- 質問文だけを書いてください。解説や前置きは禁止です。
-- 各質問は 40文字以内 を目安にすること。
-- 各質問は必ず「?」または「？」で終わること。
-- 質問文以外（解説や理由など）は書かないこと。
-- 出力形式は **Markdown の箇条書きのみ** とします。
+【質問生成ガイドライン】
+- 表面的な質問ではなく、回答の核心を深掘りする質問を生成
+- 実務で役立つ具体的なアクションにつながる質問
+- 見落とされがちなリスクや代替案を問う質問
+- 各質問は60〜100文字程度で、具体的かつ詳細に
 
-【出力フォーマット（厳守）】
-- 質問文1？
-- 質問文2？
-- 質問文3？
+【出力形式（厳守）】
+- [質問1: 具体的で深い質問文？]
+- [質問2: 実務につながる質問文？]
+- [質問3: リスクや代替案を問う質問文？]
 """
                     suggestion_resp = client.models.generate_content(
                         model="gemini-2.5-flash",
-                        contents=[{"role": "user", "parts": [{"text": suggestion_prompt}]}],
-                        config=types.GenerateContentConfig(temperature=0.6, max_output_tokens=256)  # Phase A: 質問の一貫性向上
+                        contents=[{{"role": "user", "parts": [{{"text": suggestion_prompt}}]}}],
+                        config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=512)  # 品質向上のためトークン増加
                     )
                     
                     # 出力を整形してから追加
