@@ -2739,116 +2739,136 @@ function copyToClipboard(elementId) {{
                     grok_status = "skipped"
                     grok_error_msg = None
 
-                    if enable_meta and OPENROUTER_API_KEY:
-                        status_container.write(f"Phase 1.5b: OpenRouterセカンダリモデル ({SECONDARY_MODEL_NAME}) 独立思考中...")
-                        grok_mode = "full_max" if "MAX" in response_mode else "default"
+                    # ▼▼▼ Phase 1.5b/d/e: 並列処理（高速化） ▼▼▼
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
+                    
+                    # 並列タスク用のヘルパー関数（スレッドセーフ）
+                    def run_grok_task():
+                        """Grok/OpenRouter セカンダリモデル"""
+                        if not (enable_meta and OPENROUTER_API_KEY):
+                            return {"status": "skipped", "thought": "", "error": None}
                         try:
-                            # fact/risk summaryがあれば使用、なければresearch_text
+                            grok_mode = "full_max" if "MAX" in response_mode else "default"
                             grok_input = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}" if fact_summary else research_text
-                            grok_thought = think_with_grok(prompt, grok_input, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
-
-                            if grok_thought:
-                                grok_status = "success"
-                                status_container.write(f"✓ {SECONDARY_MODEL_NAME} 独立思考完了")
-                                with status_container.expander(f"{SECONDARY_MODEL_NAME} の独立回答案", expanded=False):
-                                    st.markdown(grok_thought)
-                            else:
-                                grok_status = "empty"
-                                status_container.write(f"ℹ️ {SECONDARY_MODEL_NAME} から有効な出力がありませんでした")
+                            result = think_with_grok(prompt, grok_input, enable_x_search=enable_grok_x_search, mode=grok_mode).strip()
+                            if result:
+                                return {"status": "success", "thought": result, "error": None}
+                            return {"status": "empty", "thought": "", "error": None}
                         except Exception as e:
-                            grok_status = "error"
-                            grok_error_msg = str(e)
-                            status_container.write(f"⚠ {SECONDARY_MODEL_NAME} 思考エラー: {e}")
-
-                    # ▼▼▼ Phase 1.5d: AWS Bedrock (Claude 4.5 Sonnet) 独立思考 ▼▼▼
+                            return {"status": "error", "thought": "", "error": str(e)}
+                    
+                    def run_claude_task():
+                        """Claude 4.5 Sonnet (AWS Bedrock)"""
+                        is_az_mode = "Az" in response_mode
+                        if not (is_az_mode and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
+                            return {"status": "skipped", "thought": "", "usage": {}, "error": None}
+                        try:
+                            if fact_summary:
+                                safe_text = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}"
+                            else:
+                                safe_text = research_text[:40000]
+                            thought, usage = think_with_claude45_bedrock(prompt, safe_text)
+                            thought = thought.strip() if thought else ""
+                            if thought and not thought.startswith("Error"):
+                                return {"status": "success", "thought": thought, "usage": usage, "error": None}
+                            return {"status": "error", "thought": thought, "usage": {}, "error": None}
+                        except Exception as e:
+                            return {"status": "error", "thought": "", "usage": {}, "error": str(e)}
+                    
+                    def run_o4mini_task():
+                        """o4-mini (GitHub Models)"""
+                        if fact_summary:
+                            safe_text = f"{fact_summary[:1500]}\n\n{risk_summary[:1500]}"
+                        else:
+                            safe_text = research_text[:3000]
+                        input_len = len(f"{prompt}\n\n{safe_text}")
+                        
+                        if not (is_ms_az_mode and GITHUB_TOKEN and input_len <= 3800):
+                            return {"status": "skipped", "thought": "", "input_len": input_len, "error": None}
+                        try:
+                            thought, _ = think_with_o4_mini(prompt, safe_text)
+                            thought = thought.strip() if thought else ""
+                            if thought and not thought.startswith("Error"):
+                                return {"status": "success", "thought": thought, "input_len": input_len, "error": None}
+                            return {"status": "error", "thought": thought, "input_len": input_len, "error": None}
+                        except Exception as e:
+                            return {"status": "error", "thought": "", "input_len": input_len, "error": str(e)}
+                    
+                    # 並列実行
+                    status_container.write("🚀 Phase 1.5: マルチモデル並列思考中...")
+                    
+                    grok_thought = ""
+                    grok_status = "skipped"
                     claude45_thought = ""
                     claude45_status = "skipped"
                     claude45_usage = {}
-
-                    # 発動条件: Azモード（本気MAXのAz系）のみ && AWS認証情報設定済み
-                    is_az_mode = "Az" in response_mode  # "熟考 (本気MAX)Az" or "熟考 (本気MAX)ms/Az"
-                    use_claude45 = (is_az_mode and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-
-                    if use_claude45:
-                        status_container.write(f"Phase 1.5d: Claude 4.5 Sonnet (AWS Bedrock) 独立思考中...")
-                        try:
-                            # Claude 4.5 Sonnet へはfact/risk summaryを渡す
-                            if fact_summary:
-                                safe_research_text = f"【事実】\n{fact_summary}\n\n【リスク】\n{risk_summary}"
-                            else:
-                                safe_research_text = research_text[:40000] if len(research_text) > 40000 else research_text
-
-                            claude45_thought, claude45_usage = think_with_claude45_bedrock(prompt, safe_research_text)
-                            claude45_thought = claude45_thought.strip() if claude45_thought else ""
-
-                            if claude45_thought and not claude45_thought.startswith("Error"):
-                                claude45_status = "success"
-                                status_container.write(f"✓ Claude 4.5 Sonnet 独立思考完了")
-                                with status_container.expander(f"Claude 4.5 Sonnet の独立回答案", expanded=False):
-                                    st.markdown(claude45_thought)
-                                
-                                # コスト計算 (Claude 4.5 Sonnet on Bedrock)
-                                # 料金: Input $3/MTok, Output $15/MTok
-                                if claude45_usage:
-                                    input_tokens = claude45_usage.get("inputTokens", 0)
-                                    output_tokens = claude45_usage.get("outputTokens", 0)
-                                    claude_cost = (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
-                                    st.session_state.session_cost += claude_cost
-                                    usage_stats["total_cost_usd"] += claude_cost
-                                    usage_stats["total_input_tokens"] += input_tokens
-                                    usage_stats["total_output_tokens"] += output_tokens
-                                    status_container.write(f"💰 Claude 4.5コスト: ${claude_cost:.4f} (In: {input_tokens}, Out: {output_tokens})")
-                            else:
-                                claude45_status = "error"
-                                # エラー内容はExpanderの中に隠してUXを損なわないようにする
-                                with status_container.expander(f"⚠ Claude 4.5 Sonnet エラー詳細", expanded=False):
-                                    st.code(claude45_thought)
-                        except Exception as e:
-                            claude45_status = "error"
-                            status_container.write(f"⚠ Claude 4.5 Sonnet 処理エラー: {e}")
-                    # ▲▲▲ Phase 1.5d ここまで ▲▲▲
-
-                    # ▼▼▼ Phase 1.5e: o4-mini (GitHub Models) 独立思考 (ms/Azモードのみ) ▼▼▼
                     o4mini_thought = ""
                     o4mini_status = "skipped"
                     
-                    # 発動条件の事前準備（is_ms_az_modeはPhase 1.3で定義済み）
-                    # o4-mini用に入力を準備 - fact/risk summaryを優先使用
-                    if fact_summary:
-                        safe_research_text = f"{fact_summary[:1500]}\n\n{risk_summary[:1500]}"
-                    else:
-                        safe_research_text = research_text[:3000]  # リサーチテキストを3000文字に切り詰め
-                    input_text_for_o4 = f"{prompt}\n\n{safe_research_text}"
-                    
-                    # 発動条件: ms/Azモード && GitHub Token && 実際の入力が3800文字以下
-                    use_o4mini = (
-                        is_ms_az_mode
-                        and GITHUB_TOKEN
-                        and len(input_text_for_o4) <= 3800
-                    )
-                    
-                    if use_o4mini:
-                        status_container.write(f"Phase 1.5e: o4-mini (GitHub Models) 独立思考中...")
-                        try:
-                            o4mini_thought, _ = think_with_o4_mini(prompt, safe_research_text)
-                            o4mini_thought = o4mini_thought.strip() if o4mini_thought else ""
+                    with ThreadPoolExecutor(max_workers=3) as executor:
+                        futures = {
+                            executor.submit(run_grok_task): "grok",
+                            executor.submit(run_claude_task): "claude",
+                            executor.submit(run_o4mini_task): "o4mini"
+                        }
+                        
+                        for future in as_completed(futures, timeout=60):
+                            name = futures[future]
+                            try:
+                                result = future.result()
+                                
+                                if name == "grok":
+                                    grok_status = result["status"]
+                                    grok_thought = result["thought"]
+                                    grok_error_msg = result.get("error")
+                                    if grok_status == "success":
+                                        status_container.write(f"✓ {SECONDARY_MODEL_NAME} 完了")
+                                    elif grok_status == "error":
+                                        status_container.write(f"⚠ {SECONDARY_MODEL_NAME}: {grok_error_msg}")
+                                
+                                elif name == "claude":
+                                    claude45_status = result["status"]
+                                    claude45_thought = result["thought"]
+                                    claude45_usage = result.get("usage", {})
+                                    if claude45_status == "success":
+                                        status_container.write("✓ Claude 4.5 Sonnet 完了")
+                                        # コスト計算
+                                        if claude45_usage:
+                                            input_tokens = claude45_usage.get("inputTokens", 0)
+                                            output_tokens = claude45_usage.get("outputTokens", 0)
+                                            claude_cost = (input_tokens / 1_000_000) * 3.0 + (output_tokens / 1_000_000) * 15.0
+                                            st.session_state.session_cost += claude_cost
+                                            usage_stats["total_cost_usd"] += claude_cost
+                                            status_container.write(f"💰 Claude: ${claude_cost:.4f}")
+                                    elif claude45_status == "error":
+                                        status_container.write("⚠ Claude 4.5 エラー")
+                                
+                                elif name == "o4mini":
+                                    o4mini_status = result["status"]
+                                    o4mini_thought = result["thought"]
+                                    if o4mini_status == "success":
+                                        status_container.write("✓ o4-mini 完了")
+                                    elif o4mini_status == "skipped" and is_ms_az_mode and GITHUB_TOKEN:
+                                        input_len = result.get("input_len", 0)
+                                        if input_len > 3800:
+                                            status_container.write(f"ℹ️ o4-mini スキップ (入力長: {input_len})")
                             
-                            if o4mini_thought and not o4mini_thought.startswith("Error"):
-                                o4mini_status = "success"
-                                status_container.write(f"✓ o4-mini 独立思考完了")
-                                with status_container.expander(f"o4-mini の独立回答案", expanded=False):
-                                    st.markdown(o4mini_thought)
-                            else:
-                                o4mini_status = "error"
-                                with status_container.expander(f"⚠ o4-mini エラー詳細", expanded=False):
-                                    st.code(o4mini_thought)
-                        except Exception as e:
-                            o4mini_status = "error"
-                            status_container.write(f"⚠ o4-mini 処理エラー: {e}")
-                    elif is_ms_az_mode and GITHUB_TOKEN and len(input_text_for_o4) > 3800:
-                        status_container.write(f"ℹ️ o4-mini スキップ (入力長: {len(input_text_for_o4)} > 3800文字)")
-                        o4mini_status = "skipped"
-                    # ▲▲▲ Phase 1.5e ここまで ▲▲▲
+                            except Exception as e:
+                                status_container.write(f"⚠ {name} 並列処理エラー: {e}")
+                    
+                    # 結果をExpanderに表示（成功したもののみ）
+                    if grok_status == "success" and grok_thought:
+                        with status_container.expander(f"{SECONDARY_MODEL_NAME} の独立回答案", expanded=False):
+                            st.markdown(grok_thought)
+                    
+                    if claude45_status == "success" and claude45_thought:
+                        with status_container.expander("Claude 4.5 Sonnet の独立回答案", expanded=False):
+                            st.markdown(claude45_thought)
+                    
+                    if o4mini_status == "success" and o4mini_thought:
+                        with status_container.expander("o4-mini の独立回答案", expanded=False):
+                            st.markdown(o4mini_thought)
+                    # ▲▲▲ Phase 1.5 並列処理 ここまで ▲▲▲
 
                     # --- Phase 2: 統合エージェント ---
                     status_container.write("Phase 2: 統合フェーズ実行中...")
