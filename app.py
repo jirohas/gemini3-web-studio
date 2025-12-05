@@ -1832,6 +1832,29 @@ with st.sidebar:
     if manual_cost != current_manual_cost:
         save_manual_cost(manual_cost)
     
+    # ▼▼▼ 残り回数の予測表示 ▼▼▼
+    JPY_USD_RATE = 150.0  # 1ドル150円換算
+    COST_PER_RUN_ESTIMATE = 2.0  # 本気MAX 1回あたりの推定コスト($)
+    
+    remaining_usd = (MAX_BUDGET_JPY / JPY_USD_RATE) - usage_stats['total_cost_usd']
+    remaining_runs = int(remaining_usd / COST_PER_RUN_ESTIMATE)
+    if remaining_runs < 0:
+        remaining_runs = 0
+    
+    # プログレスバー
+    progress_value = min(1.0, max(0.0, usage_stats['total_cost_usd'] / (MAX_BUDGET_JPY / JPY_USD_RATE)))
+    st.progress(progress_value)
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.metric("残り予算", f"${remaining_usd:.1f}")
+    with col_b:
+        st.metric("本気MAX", f"あと {remaining_runs} 回", help="1回 $2.0 で計算")
+    
+    if remaining_runs < 10:
+        st.warning("⚠️ 予算が残りわずかです")
+    # ▲▲▲ 残り回数の予測表示 ここまで ▲▲▲
+    
     st.link_button("💰 Google Cloud Console", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
     st.link_button("☁️ AWS Free Tier Dashboard", "https://us-east-1.console.aws.amazon.com/costmanagement/home?region=us-east-1#/freetier")
     st.caption("📘 GitHub Models: 使用状況は [Settings → Developer settings → Tokens](https://github.com/settings/tokens) で確認")
