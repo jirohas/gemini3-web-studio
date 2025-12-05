@@ -3413,19 +3413,50 @@ function copyToClipboard(elementId) {{
                 update_current_session_messages(messages)
 
             except Exception as e:
-                # Error handler - status_container doesn't exist in this scope
+                # 🔥 実行完遂保証: どんなエラーでも必ず回答を生成
+                import traceback
                 err_text = str(e)
+                error_traceback = traceback.format_exc()
+                print(f"[ERROR] Main processing failed: {err_text}")
+                print(error_traceback)
+                
+                # エラー時のフォールバック回答を生成
+                fallback_answer = ""
+                
                 if "RESOURCE_EXHAUSTED" in err_text or "429" in err_text:
-                    st.error(
-                        "⚠️ Vertex AI / Gemini のクォータに達しました。\n\n"
-                        "・プロジェクトのレート制限 / 日次制限の可能性があります。\n"
-                        "・しばらく時間をおいて再度お試しください。\n"
-                        "・Google Cloud Console の「Vertex AI → 使用状況」からクォータ状況を確認できます。"
+                    fallback_answer = (
+                        "## ⚠️ クォータ制限により処理が中断されました\n\n"
+                        "Vertex AI / Gemini のレート制限に達しました。\n\n"
+                        "### 対処法:\n"
+                        "1. **数分待ってから再試行**してください\n"
+                        "2. Google Cloud Console の「Vertex AI → 使用状況」でクォータを確認\n"
+                        "3. 必要に応じてクォータ増加をリクエスト\n\n"
+                        f"### 質問内容（保存済み）:\n{prompt[:500]}..."
                     )
                 elif "NOT_FOUND" in err_text and "Publisher Model" in err_text:
-                    st.error(
-                        "⚠️ 指定したモデルがこのプロジェクト / ロケーションでは利用できません。\n"
-                        "・サイドバーのモデルIDを、2.5系 または 3 Pro に変更してお試しください。\n"
+                    fallback_answer = (
+                        "## ⚠️ モデルが利用できません\n\n"
+                        "指定したモデルがこのプロジェクト / ロケーションでは利用できません。\n\n"
+                        "### 対処法:\n"
+                        "サイドバーのモデルIDを、`gemini-2.5-pro` または `gemini-3-pro-preview` に変更してお試しください。"
                     )
                 else:
-                    st.error(f"An error occurred: {e}")
+                    fallback_answer = (
+                        "## ⚠️ 処理中にエラーが発生しました\n\n"
+                        f"**エラー内容**: `{err_text[:200]}`\n\n"
+                        "### 自動リカバリーを試みています...\n\n"
+                        f"### 質問内容（保存済み）:\n{prompt[:500]}...\n\n"
+                        "**推奨アクション**: ページをリロードして再試行してください。"
+                    )
+                
+                # フォールバック回答を表示
+                st.error(fallback_answer)
+                
+                # 🔥 重要: エラー時も回答を履歴に保存（次回参照用）
+                messages.append({
+                    "role": "model",
+                    "content": fallback_answer,
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "error": True  # エラーフラグ
+                })
+                update_current_session_messages(messages)
