@@ -1464,7 +1464,7 @@ with st.sidebar:
         # ボタンを縦に配置
         if st.button("✨ 提案 (直近)", use_container_width=True):
             with st.spinner("生成中..."):
-                rec_client = get_gemini_client()  # Get client for recommendations
+                rec_client = get_client()  # logic.pyのget_clientを使用
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(rec_client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
                 
@@ -1485,7 +1485,7 @@ with st.sidebar:
 
         if st.button("🔥 提案 (全履歴)", use_container_width=True):
             with st.spinner("全履歴分析中..."):
-                rec_client = get_gemini_client()  # Get client for recommendations
+                rec_client = get_client()  # logic.pyのget_clientを使用
                 user_profile = load_user_profile()
                 rec_text, usage = generate_recommendations(rec_client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
                 
