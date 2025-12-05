@@ -1372,15 +1372,20 @@ with st.sidebar:
             
             if mode_type == "grok強化(+mz/Az)":
                 response_mode = st.radio(
-                   "モード",
-                    [
-                        "AUTO（質問に応じて自動）",  # Phase C: Auto routing
+                    "応答モードを選択してください:",
+                    options=[
+                        "熟考 (本気MAX)ms/Az", 
                         "熟考 + 鬼軍曹",
-                        "熟考 (本気MAX)Az",
-                        "熟考 (本気MAX)ms/Az",
-                        "熟考(メタ思考)+grok検索強化版",
+                        "熟考(本気MAX)/grok",
+                        "熟考/grok",
+                        "熟考 (中規模MAX)Az",
+                        "熟考 (本気)ms",
+                        "熟考 (中規模)", 
+                        "β1高速 (通常)", 
+                        "その他"
                     ],
-                    index=0  # デフォルト: AUTO
+                    index=0,
+                    key="response_mode"
                 )
             elif mode_type == "grok通常モード":
                 response_mode = st.radio(
@@ -2161,23 +2166,16 @@ if stop_generation:
     )
 
 # =========================
-# チャット入力（常に表示）
+# チャット入力
 # =========================
 prompt = st.chat_input("何か聞いてください...")
 
 if prompt:
-    # Debug: Show that input was received
-    st.write(f"🔍 DEBUG: Prompt received: {prompt[:50]}...")
-    st.write(f"🔍 DEBUG: Client is None? {client is None}")
-    st.write(f"🔍 DEBUG: stop_generation? {stop_generation}")
-    
     # Budget check at submission time
     if stop_generation:
         st.error("❌ コスト上限に達しているため、この実行はキャンセルしました。予算設定を見直してください。")
         st.info(f"現在: ${usage_stats['total_cost_usd']:.4f} / 上限: ${MAX_BUDGET_USD:.2f}")
         st.stop()
-    
-    st.write("🔍 DEBUG: Passed budget check, starting processing...")
     
     # ---- ユーザー発言表示 ----
     with st.chat_message("user"):
@@ -2221,15 +2219,11 @@ function copyToClipboard(elementId) {{
     })
     update_current_session_messages(messages)
 
-    st.write("🔍 DEBUG: Starting chat processing...")
-
     # ========================================
-    # Phase C: AUTO Router Integration
+    # Parse response_mode and set flags
     # ========================================
     routing_info = None
     
-    if response_mode == "AUTO（質問に応じて自動）":
-        with st.status("🤖 AUTO: 質問を分析中...", expanded=False) as routing_status:
             try:
                 from router import analyze_question_for_routing, route_question_to_pipeline
                 
