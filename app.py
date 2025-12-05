@@ -308,11 +308,18 @@ SECONDARY_MODEL_NAME = os.getenv(
 
 def compact_newlines(text: str) -> str:
     """
-    2行以上の連続空行を1行（空行1つ）に圧縮する
+    過剰な空白行を圧縮し、見やすいレイアウトにする
     """
     import re
-    # 2行以上の連続改行（= 1行以上の空行）を1行の空行（改行2つ）に圧縮
-    return re.sub(r"\n\n+", "\n\n", text)
+    # 1. 3行以上の連続改行を2行に圧縮
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # 2. スペースのみの行を空行に変換
+    text = re.sub(r'\n[ \t]+\n', '\n\n', text)
+    # 3. 改行+スペース+改行のパターンを改行2つに
+    text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
+    # 4. テーブル後の過剰な空白を削除（テーブル行の後に3行以上の空白がある場合）
+    text = re.sub(r'(\|[^\n]+\|)\n{3,}', r'\1\n\n', text)
+    return text
 
 def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple[str, str, dict]:
     """
@@ -2093,18 +2100,37 @@ for idx, msg in enumerate(messages):
                         st.markdown(logs["phase1_5d_claude"][:1500] + "..." if len(logs.get("phase1_5d_claude", "")) > 1500 else logs["phase1_5d_claude"])
             # ▲▲▲ Deep Log ここまで ▲▲▲
 
-# スクロールボタン（長いチャット用）
+# スクロールボタン（長いチャット用）- Streamlit iframe対応版
 if len(messages) > 5:
     st.markdown("""
-    <div style="position: fixed; right: 20px; bottom: 100px; z-index: 999;">
-        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" 
+    <script>
+    function scrollToTop() {
+        // Streamlitのメインコンテンツ領域をスクロール
+        const mainContent = window.parent.document.querySelector('section.main');
+        if (mainContent) {
+            mainContent.scrollTo({top: 0, behavior: 'smooth'});
+        } else {
+            window.parent.scrollTo({top: 0, behavior: 'smooth'});
+        }
+    }
+    function scrollToBottom() {
+        const mainContent = window.parent.document.querySelector('section.main');
+        if (mainContent) {
+            mainContent.scrollTo({top: mainContent.scrollHeight, behavior: 'smooth'});
+        } else {
+            window.parent.scrollTo({top: window.parent.document.body.scrollHeight, behavior: 'smooth'});
+        }
+    }
+    </script>
+    <div style="position: fixed; right: 20px; bottom: 100px; z-index: 9999;">
+        <button onclick="scrollToTop()" 
                 style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
-                       border: 2px solid #ccc; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                       border: 2px solid #666; border-radius: 50%; background: #333; color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
             ⬆️
         </button>
-        <button onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'})" 
+        <button onclick="scrollToBottom()" 
                 style="display: block; margin: 5px; padding: 10px 15px; font-size: 24px; cursor: pointer; 
-                       border: 2px solid #ccc; border-radius: 50%; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                       border: 2px solid #666; border-radius: 50%; background: #333; color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
             ⬇️
         </button>
     </div>
