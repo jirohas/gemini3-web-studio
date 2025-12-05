@@ -2220,19 +2220,14 @@ function copyToClipboard(elementId) {{
     update_current_session_messages(messages)
 
     # ========================================
-    # Parse response_mode and set flags
+    # モデル応答
     # ========================================
-    routing_info = None
-    
+    with st.chat_message("assistant"):
+        with st.status("思考中...", expanded=True) as status_container:
             try:
-                from router import analyze_question_for_routing, route_question_to_pipeline
-                
-                # Step 1: Analyze question
-                classification = analyze_question_for_routing(client, prompt)
-
                 # 過去のメッセージをモデルの履歴に変換
                 model_history = []
-                for msg in messages:
+                for msg in messages[:-1]:  # 最新のユーザーメッセージは別途追加
                     if msg["role"] == "user":
                         model_history.append(
                             types.Content(
@@ -2258,9 +2253,9 @@ function copyToClipboard(elementId) {{
                         bytes_data = uploaded_file.getvalue()
                         part = types.Part.from_bytes(data=bytes_data, mime_type=mime_type)
                         current_parts.append(part)
-                        routing_status.write(f"ファイル準備完了: {uploaded_file.name}")
+                        status_container.write(f"ファイル準備完了: {uploaded_file.name}")
                     except Exception as e:
-                        routing_status.error(
+                        status_container.error(
                             f"ファイルの読み込みに失敗しました: {uploaded_file.name} - {e}"
                         )
 
@@ -2268,7 +2263,7 @@ function copyToClipboard(elementId) {{
                 if pasted_image_bytes:
                     import base64
 
-                    routing_status.write("貼り付けられた画像を処理中...")
+                    status_container.write("貼り付けられた画像を処理中...")
                     try:
                         if isinstance(pasted_image_bytes, str):
                             if pasted_image_bytes.startswith("data:"):
@@ -2282,21 +2277,21 @@ function copyToClipboard(elementId) {{
                             data=image_bytes_decoded, mime_type="image/png"
                         )
                         current_parts.append(part)
-                        routing_status.write("貼り付けられた画像の準備完了")
+                        status_container.write("貼り付けられた画像の準備完了")
                     except Exception as e:
-                        routing_status.error(f"貼り付けられた画像の処理に失敗しました: {e}")
+                        status_container.error(f"貼り付けられた画像の処理に失敗しました: {e}")
 
                 # YouTube 字幕
                 if youtube_url:
                     vid_id = extract_youtube_id(youtube_url)
                     if vid_id:
-                        routing_status.write("YouTubeの字幕を取得中...")
+                        status_container.write("YouTubeの字幕を取得中...")
                         transcript_text = get_youtube_transcript(vid_id)
                         current_parts.append(
                             types.Part.from_text(text=f"YouTube Transcript:\n{transcript_text}")
                         )
                     else:
-                        routing_status.write("無効なYouTube URLです。")
+                        status_container.write("無効なYouTube URLです。")
 
                 contents_for_model = model_history + [
                     types.Content(role="user", parts=current_parts)
@@ -2332,46 +2327,19 @@ function copyToClipboard(elementId) {{
                 grounding_metadata = None
                 
                 # =========================
-                # Phase C: AUTO Mode Routing
+                # Manual Mode Settings
                 # =========================
-                routing_info = None  # Store for debug display
+                # β1通常モード以外はリサーチを実行
+                enable_research = "β1" not in response_mode
+                enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
+                enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
                 
-                if "AUTO" in response_mode:
-                    try:
-                        from router import analyze_question_for_routing, route_question_to_pipeline
-                        
-                        status_container.write("🤖 AUTO: 質問を分析中...")
-                        
-                        # Analyze question
-                        classification = analyze_question_for_routing(
-                            client=client,
-                            user_question=prompt,
-                            user_profile=st.session_state.get("user_profile")
-                        )
-                        routing_info = {
-                            "classification": classification,
-                            "pipeline": pipeline
-                        }
-                        
-                        routing_status.update(label=f"✓ AUTO判定: {pipeline['routing_reason']}", state="complete")
-                        
-                    except Exception as e:
-                        st.error(f"ユーザープロファイルまたは自動提案の生成に失敗しました: {e}")
-                        import traceback
-                        traceback.print_exc()
-                    # Manual Mode Settings (従来通り)
-                    # =========================
-                    # β1通常モード以外はリサーチを実行
-                    enable_research = "β1" not in response_mode
-                    enable_meta = "メタ" in response_mode or "MAX" in response_mode or "grok" in response_mode
-                    enable_strict = "鬼軍曹" in response_mode or "MAX" in response_mode
-                    
-                    # Grok X検索はニュース/トレンド系のみ
-                    def should_use_x_search(prompt: str) -> bool:
-                        keywords = ["Xで", "Twitter", "ツイッター", "ポスト", "トレンド", "炎上", "バズ", "話題"]
-                        return any(kw in prompt for kw in keywords)
-                    
-                    enable_grok_x_search = "grok" in response_mode and should_use_x_search(prompt)
+                # Grok X検索はニュース/トレンド系のみ
+                def should_use_x_search(prompt: str) -> bool:
+                    keywords = ["Xで", "Twitter", "ツイッター", "ポスト", "トレンド", "炎上", "バズ", "話題"]
+                    return any(kw in prompt for kw in keywords)
+                
+                enable_grok_x_search = "grok" in response_mode and should_use_x_search(prompt)
 
                 # =========================
                 # 通常モード (高速 / 鬼軍曹)
@@ -3026,31 +2994,6 @@ function copyToClipboard(elementId) {{
                                 grok_review_status = "success"
                                 # 処理履歴を先に構築
                                 
-                # ▼▼▼ Phase C: AUTO Routing Debug Display ▼▼▼
-                if routing_info:
-                    with st.expander("🤖 AUTO Routing Info", expanded=False):
-                        st.markdown("### 質問分析結果")
-                        classification = routing_info["classification"]
-                        st.json(classification)
-                        
-                        st.markdown("### ルーティング判定")
-                        pipeline = routing_info["pipeline"]
-                        st.markdown(f"**モード**: `{pipeline['mode_name']}`")
-                        st.markdown(f"**判定理由**: {pipeline['routing_reason']}")
-                        
-                        st.markdown("**有効化されたフラグ**:")
-                        flags_display = {
-                            "enable_research": pipeline["enable_research"],
-                            "enable_meta": pipeline["enable_meta"],
-                            "enable_strict": pipeline["enable_strict"],
-                            "use_grok": pipeline.get("use_grok", False),
-                            "use_claude": pipeline.get("use_claude", False),
-                            "use_o4_mini": pipeline.get("use_o4_mini", False),
-                            "use_x_search": pipeline.get("use_x_search", False)
-                        }
-                        st.json(flags_display)
-                # ▲▲▲ Phase C: AUTO Routing Debug ここまで ▲▲▲
-                
                 processing_history = []
                 processing_history.append("**Phase 1**: Gemini リサーチ (Google検索)")
                 if enable_meta:
