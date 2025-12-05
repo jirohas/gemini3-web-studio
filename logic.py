@@ -26,8 +26,8 @@ MANUAL_COST_FILE = "manual_cost.json"
 USER_PROFILE_FILE = "user_profile.json"
 USD_TO_JPY = float(os.getenv("USD_TO_JPY", "150.0"))
 
-# Increased budget limit for development
-MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "1000.0"))  # Increased from 100 to 1000
+# Budget limit: Gemini $300 (¥45,000) + AWS $100 (¥15,000) = $400 (¥60,000)
+MAX_BUDGET_USD = float(os.getenv("MAX_BUDGET_USD", "400.0"))
 MAX_BUDGET_JPY = MAX_BUDGET_USD * USD_TO_JPY
 
 TRIAL_LIMIT_USD = float(os.getenv("TRIAL_LIMIT_USD", "300.0"))
