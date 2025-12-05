@@ -1447,9 +1447,9 @@ with st.sidebar:
                 ["🚀 本気MAX", "🧪 ベータ", "⚡ 軽量", "その他"],
                 index=0,
                 horizontal=True,
-                label_visibility="collapsed",
-                help="本気MAX=旧gr強化+msAz | ベータ=旧gr通常 | 軽量=旧gr強化"
+                label_visibility="collapsed"
             )
+            st.caption("本気MAX=旧gr強化+msAz | ベータ=旧gr通常 | 軽量=旧gr強化")
             
             if mode_type == "🚀 本気MAX":
                 # ▼▼▼ メニュー簡素化: 本気MAXをメインに ▼▼▼
