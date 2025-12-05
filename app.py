@@ -66,8 +66,8 @@ if not st.session_state.authenticated:
     if st.button("ログイン"):
         if password == APP_PASSWORD:
             st.session_state.authenticated = True
-            # URLにトークンを付与してリロード（これでブックマーク可能になる）
-            st.query_params["auth"] = SECRET_TOKEN
+            # セキュリティ修正: URLからトークンを削除（ブラウザ履歴/スクショ漏洩防止）
+            st.query_params.clear()
             st.rerun()
         else:
             st.error("パスワードが違います。")
@@ -2961,15 +2961,31 @@ function copyToClipboard(elementId) {{
                             ),
                         )
                         
-                        review_resp = client.models.generate_content(
-                            model=model_id,
-                            contents=review_contents,
-                            config=review_config,
-                        )
-                        
-                        final_answer = extract_text_from_response(review_resp)
-                        
-                        status_container.write("✓ レビュー完了")
+                        # Phase 3 リトライ機能（クォータエラー対策）
+                        import time
+                        max_retries = 3
+                        for attempt in range(max_retries):
+                            try:
+                                review_resp = client.models.generate_content(
+                                    model=model_id,
+                                    contents=review_contents,
+                                    config=review_config,
+                                )
+                                final_answer = extract_text_from_response(review_resp)
+                                status_container.write("✓ レビュー完了")
+                                break
+                            except Exception as e:
+                                error_msg = str(e).lower()
+                                if "quota" in error_msg or "rate" in error_msg or "resource" in error_msg:
+                                    if attempt < max_retries - 1:
+                                        wait_time = (attempt + 1) * 5  # 5秒, 10秒, 15秒
+                                        status_container.write(f"⏳ クォータ制限のため {wait_time}秒待機中... (試行 {attempt + 2}/{max_retries})")
+                                        time.sleep(wait_time)
+                                    else:
+                                        status_container.warning("⚠️ Phase 3: クォータ制限により断念。Phase 2の結果を使用します。")
+                                        final_answer = draft_answer  # Phase 2の結果を使用
+                                else:
+                                    raise e
                         
                         # --- Phase 3b: Grok鬼軍曹レビュー (多層モード + 鬼軍曹モード全般) ---
                         # 多層モードで、かつ鬼軍曹系のモード（鬼軍曹、メタ思考、本気MAX）で発動
