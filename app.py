@@ -3006,7 +3006,34 @@ function copyToClipboard(elementId) {{
                                 config=synthesis_config,
                             )
                             draft_answer = extract_text_from_response(synthesis_resp)
-                            status_container.write("✓ 統合完了")
+                            
+                            # ▼▼▼ finish_reason検出：途中で切れたら自動継続 ▼▼▼
+                            candidate = synthesis_resp.candidates[0] if synthesis_resp.candidates else None
+                            if candidate and hasattr(candidate, 'finish_reason'):
+                                finish_reason = str(candidate.finish_reason).upper()
+                                if "MAX_TOKENS" in finish_reason or "LENGTH" in finish_reason:
+                                    status_container.write("⚠️ 回答が途中で切れました。続きを取得中...")
+                                    try:
+                                        continuation_resp = client.models.generate_content(
+                                            model=model_id,
+                                            contents=[
+                                                types.Content(role="user", parts=[
+                                                    types.Part.from_text(text="先ほどの回答が途中で途切れました。続きを書いてください。要約せず、途切れた箇所から続けてください。")
+                                                ])
+                                            ],
+                                            config=synthesis_config,
+                                        )
+                                        continuation_text = extract_text_from_response(continuation_resp)
+                                        draft_answer += "\n\n" + continuation_text
+                                        status_container.write("✓ 統合完了（自動継続）")
+                                    except Exception as cont_e:
+                                        draft_answer += "\n\n*（続きの取得に失敗しました）*"
+                                else:
+                                    status_container.write("✓ 統合完了")
+                            else:
+                                status_container.write("✓ 統合完了")
+                            # ▲▲▲ finish_reason検出 ここまで ▲▲▲
+                            
                             break
                         except Exception as e:
                             error_msg = str(e).lower()
