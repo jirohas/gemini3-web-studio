@@ -1330,7 +1330,7 @@ stop_generation = usage_stats["total_cost_usd"] >= MAX_BUDGET_USD
 
 with st.sidebar:
     # 🔐 ログアウトボタン
-    if st.button("🔒 ログアウト", use_container_width=True):
+    if st.button("🔒 ログアウト", width="stretch"):
         st.session_state.authenticated = False
         st.query_params.clear()  # URLトークンも削除
         st.rerun()
@@ -1345,10 +1345,10 @@ with st.sidebar:
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("➕ 新規", use_container_width=True):
+        if st.button("➕ 新規", width="stretch"):
             create_new_session()
     with col2:
-        if st.button("🌱 分岐", use_container_width=True):
+        if st.button("🌱 分岐", width="stretch"):
             branch_session()
 
     # ---- 共有リンク作成 ----
@@ -1368,7 +1368,7 @@ with st.sidebar:
                 role_label = "🧑 ユーザー" if msg["role"] == "user" else "🤖 AI"
                 export_md += f"## {role_label}\n\n{msg['content']}\n\n---\n\n"
 
-            if st.button("リンク生成", use_container_width=True):
+            if st.button("リンク生成", width="stretch"):
                 with st.spinner("生成中..."):
                     try:
                         import urllib.request
@@ -1416,7 +1416,7 @@ with st.sidebar:
         
         if pasted_image_bytes:
             st.success("貼付完了")
-            st.image(pasted_image_bytes, caption="画像", use_container_width=True)
+            st.image(pasted_image_bytes, caption="画像", width="stretch")
             if st.button("🗑️ クリア", key="clear_paste"):
                 st.session_state.paste_key += 1
                 st.rerun()
@@ -1542,7 +1542,7 @@ with st.sidebar:
     # ---- おすすめ ----
     with st.expander("💡 おすすめ", expanded=False):
         # ボタンを縦に配置
-        if st.button("✨ 提案 (直近)", use_container_width=True):
+        if st.button("✨ 提案 (直近)", width="stretch"):
             with st.spinner("生成中..."):
                 rec_client = get_gemini_client()  # 早期定義済み関数を使用
                 user_profile = load_user_profile()
@@ -1563,7 +1563,7 @@ with st.sidebar:
         
         st.markdown("") # 隙間
 
-        if st.button("🔥 提案 (全履歴)", use_container_width=True):
+        if st.button("🔥 提案 (全履歴)", width="stretch"):
             with st.spinner("全履歴分析中..."):
                 rec_client = get_gemini_client()  # 早期定義済み関数を使用
                 user_profile = load_user_profile()
@@ -1736,7 +1736,7 @@ with st.sidebar:
         for session in recent_sessions:
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                if st.button(session["title"], key=f"btn_{session['id']}", use_container_width=True):
+                if st.button(session["title"], key=f"btn_{session['id']}", width="stretch"):
                     switch_session(session["id"])
             with col2:
                 if st.button("🗑️", key=f"del_{session['id']}"):
@@ -1748,7 +1748,7 @@ with st.sidebar:
             for session in archive_sessions:
                 col1, col2 = st.columns([0.8, 0.2])
                 with col1:
-                    if st.button(session["title"], key=f"btn_{session['id']}", use_container_width=True):
+                    if st.button(session["title"], key=f"btn_{session['id']}", width="stretch"):
                         switch_session(session["id"])
                 with col2:
                     if st.button("🗑️", key=f"del_{session['id']}"):
