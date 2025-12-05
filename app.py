@@ -1822,68 +1822,31 @@ with st.sidebar:
     st.markdown("---")
 
     # ---- コスト表示 ----
-    from logic import load_manual_cost, save_manual_cost, MAX_BUDGET_JPY, TRIAL_LIMIT_JPY, TRIAL_EXPIRY
+    from logic import MAX_BUDGET_JPY, TRIAL_LIMIT_JPY, TRIAL_EXPIRY
     
     st.subheader("💰 Cost")
-    st.caption(f"予算: ¥{MAX_BUDGET_JPY:,.0f}")
-    st.caption(f"上限: ¥{TRIAL_LIMIT_JPY:,.0f}")
-    st.caption(f"有効期限 (GCP): {TRIAL_EXPIRY}")
-    st.caption("🆓 AWS Free Tier: Jun 02, 2026")
+    st.caption(f"Gemini予算: ¥45,000 ($300) | AWS: ¥15,000 ($100)")
+    st.caption(f"有効期限 - GCP: {TRIAL_EXPIRY} | AWS: Jun 02, 2026")
     
-    # 手動コスト入力（永続化）
-    current_manual_cost = load_manual_cost()
-    manual_cost = st.number_input(
-        "手動入力 (¥)",
-        min_value=0.0,
-        value=current_manual_cost,
-        step=10.0,
-        format="%.0f",
-        key="manual_cost_persistent",
-        help="Google Cloud Consoleで確認した実際のコスト（円）を入力してください。この値はブラウザを閉じても保持されます。"
-    )
-    
-    # 値が変更されたら保存
-    if manual_cost != current_manual_cost:
-        save_manual_cost(manual_cost)
-    
-    # ▼▼▼ AWS/Gemini別カウント + コンパクト表示 ▼▼▼
-    JPY_USD_RATE = 150.0
-    
-    # Gemini予算: $300 (¥45,000)
+    # ▼▼▼ コスト表示（セッションベース） ▼▼▼
     GEMINI_BUDGET_USD = 300.0
-    GEMINI_COST_PER_RUN = 1.8  # 本気MAX Gemini分の平均コスト
-    
-    # AWS予算: $100 (¥15,000)  
     AWS_BUDGET_USD = 100.0
-    AWS_COST_PER_RUN = 0.2  # Claude 4.5 Sonnet 1回あたり平均
+    GEMINI_COST_PER_RUN = 1.8
+    AWS_COST_PER_RUN = 0.2
     
-    # 実際の使用量: 手動入力(円) + セッション累計
-    # 手動入力はGoogle Cloud Consoleの実際の請求額を入力
-    actual_gemini_cost_jpy = manual_cost  # 手動入力は主にGemini分
-    actual_gemini_cost_usd = actual_gemini_cost_jpy / JPY_USD_RATE
     session_cost = usage_stats['total_cost_usd']
+    gemini_est = session_cost * 0.85
+    aws_est = session_cost * 0.15
     
-    # Gemini: 手動入力 + セッション分の85%
-    gemini_total = actual_gemini_cost_usd + (session_cost * 0.85)
-    gemini_remaining = max(0, GEMINI_BUDGET_USD - gemini_total)
-    gemini_runs = max(0, int(gemini_remaining / GEMINI_COST_PER_RUN))
+    gemini_runs = max(0, int((GEMINI_BUDGET_USD - gemini_est) / GEMINI_COST_PER_RUN))
+    aws_runs = max(0, int((AWS_BUDGET_USD - aws_est) / AWS_COST_PER_RUN))
     
-    # AWS: セッション分の15%のみ（無料枠なので手動入力は主にGemini）
-    aws_cost_est = session_cost * 0.15
-    aws_remaining = max(0, AWS_BUDGET_USD - aws_cost_est)
-    aws_runs = max(0, int(aws_remaining / AWS_COST_PER_RUN))
+    # プログレスバー（セッション使用量のみ表示）
+    st.progress(min(1.0, session_cost / 50.0))  # 1セッション50$を100%として表示
     
-    # プログレスバー（Gemini基準）
-    progress_value = min(1.0, max(0.0, gemini_total / GEMINI_BUDGET_USD))
-    st.progress(progress_value)
-    
-    # コンパクト表示（st.markdownで小さいフォント）
-    st.markdown(f"<small>Gemini: 残${gemini_remaining:.0f} (あと{gemini_runs}回) | AWS: 残${aws_remaining:.0f} (あと{aws_runs}回)</small>", unsafe_allow_html=True)
-    st.markdown(f"<small>💰 Gemini使用: ${gemini_total:.1f}/$300 (手動¥{manual_cost:.0f} + セッション${session_cost:.2f})</small>", unsafe_allow_html=True)
-    
-    if gemini_runs < 20:
-        st.warning("⚠️ Gemini予算が残りわずかです")
-    # ▲▲▲ AWS/Gemini別カウント ここまで ▲▲▲
+    st.markdown(f"<small>📊 今セッション: ${session_cost:.2f} | Gemini {gemini_runs}回相当 | AWS {aws_runs}回相当</small>", unsafe_allow_html=True)
+    st.caption("⚠️ 実際の請求額はGCP/AWSコンソールで確認してください")
+    # ▲▲▲ コスト表示 ここまで ▲▲▲
     
     st.link_button("💰 Google Cloud Console", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
     st.link_button("☁️ AWS Free Tier Dashboard", "https://us-east-1.console.aws.amazon.com/costmanagement/home?region=us-east-1#/freetier")
