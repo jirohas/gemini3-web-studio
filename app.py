@@ -1451,22 +1451,36 @@ with st.sidebar:
             )
             
             if mode_type == "grok強化(+mz/Az)":
+                # ▼▼▼ メニュー簡素化: 本気MAXをメインに ▼▼▼
+                st.markdown("### 🚀 推奨モード")
                 response_mode = st.radio(
-                    "応答モードを選択してください:",
+                    "応答モード:",
                     options=[
-                        "熟考 (本気MAX)ms/Az", 
-                        "熟考 + 鬼軍曹",
-                        "熟考(本気MAX)/grok",
-                        "熟考/grok",
-                        "熟考 (中規模MAX)Az",
-                        "熟考 (本気)ms",
-                        "熟考 (中規模)", 
-                        "β1高速 (通常)", 
-                        "その他"
+                        "熟考 (本気MAX)ms/Az",  # メイン推奨
                     ],
                     index=0,
                     key="response_mode"
                 )
+                
+                with st.expander("🧪 その他のモード (ベータ版)", expanded=False):
+                    beta_mode = st.radio(
+                        "ベータモードを選択:",
+                        options=[
+                            "使用しない",
+                            "熟考 + 鬼軍曹",
+                            "熟考(本気MAX)/grok",
+                            "熟考/grok",
+                            "熟考 (中規模MAX)Az",
+                            "熟考 (本気)ms",
+                            "熟考 (中規模)", 
+                            "β1高速 (通常)",
+                        ],
+                        index=0,
+                        key="beta_mode"
+                    )
+                    if beta_mode != "使用しない":
+                        response_mode = beta_mode
+                # ▲▲▲ メニュー簡素化 ここまで ▲▲▲
             elif mode_type == "grok通常モード":
                 response_mode = st.radio(
                     "モード",
