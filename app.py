@@ -1266,9 +1266,17 @@ def think_with_o4_mini(user_question: str, research_text: str) -> tuple[str, dic
 # Puter関連の関数は削除（AWS Bedrockに移行）
 
 def create_new_session():
-    current_sessions = load_sessions()
+    """
+    安定版: session_stateをマスターとして使用
+    ❌ 削除: load_sessions() ← 競合の原因
+    """
+    # session_stateをマスターとして使用
+    if "sessions" not in st.session_state:
+        st.session_state.sessions = load_sessions()  # 起動時のみ
     
-    # 現在のセッションが空なら、新しく作らずにそれを再利用する（重複防止）
+    current_sessions = st.session_state.sessions
+    
+    # 現在のセッションが空なら、新しく作らずにそれを再利用する
     if st.session_state.get("current_session_id"):
         for s in current_sessions:
             if s["id"] == st.session_state.current_session_id:
@@ -1284,9 +1292,13 @@ def create_new_session():
         "messages": [],
     }
     current_sessions.insert(0, new_session)
-    save_sessions(current_sessions)
+    
+    # 1. メモリを更新
     st.session_state.sessions = current_sessions
     st.session_state.current_session_id = new_id
+    
+    # 2. ファイルへ保存（バックアップ）
+    save_sessions(st.session_state.sessions)
     st.rerun()
 
 def switch_session(session_id):
@@ -1331,27 +1343,48 @@ def update_current_session_messages(messages):
         save_sessions(current_sessions)
 
 def get_current_messages():
+    """
+    コピーを返す版: 参照を返すと意図しない変更が起きる
+    ❌ 修正前: return session["messages"]  ← 参照を返す
+    ⭕ 修正後: return list(...)  ← コピーを返す
+    """
     if st.session_state.current_session_id:
         for session in st.session_state.sessions:
             if session["id"] == st.session_state.current_session_id:
-                return session["messages"]
+                return list(session["messages"])  # コピーを返す（重要）
     return []
 
 def delete_session(session_id):
-    current_sessions = load_sessions()
-    current_sessions = [s for s in current_sessions if s["id"] != session_id]
-    save_sessions(current_sessions)
+    """
+    安定版: session_stateをマスターとして使用
+    """
+    if "sessions" not in st.session_state:
+        st.session_state.sessions = load_sessions()
+    
+    current_sessions = [s for s in st.session_state.sessions if s["id"] != session_id]
+    
+    # 1. メモリを更新
     st.session_state.sessions = current_sessions
+    
     if st.session_state.current_session_id == session_id:
         st.session_state.current_session_id = None
-        if st.session_state.sessions:
-            st.session_state.current_session_id = st.session_state.sessions[0]["id"]
+        if current_sessions:
+            st.session_state.current_session_id = current_sessions[0]["id"]
+    
+    # 2. ファイルへ保存（バックアップ）
+    save_sessions(st.session_state.sessions)
     st.rerun()
 
 def branch_session():
-    """現在のセッションから新しいチャットを分岐"""
-    current_messages = get_current_messages()
-    current_sessions = load_sessions()
+    """
+    安定版: session_stateをマスターとして使用
+    現在のセッションから新しいチャットを分岐
+    """
+    if "sessions" not in st.session_state:
+        st.session_state.sessions = load_sessions()
+    
+    current_messages = get_current_messages()  # これはコピーを返す
+    current_sessions = st.session_state.sessions
     
     # 現在のセッションのタイトルを取得
     current_title = "新しいチャット"
@@ -1366,14 +1399,17 @@ def branch_session():
         "id": new_id,
         "title": f"{current_title} (分岐)",
         "timestamp": datetime.datetime.now().isoformat(),
-        "messages": current_messages.copy(),  # 現在の履歴をコピー
+        "messages": list(current_messages),  # ディープコピー
     }
     current_sessions.insert(0, new_session)
-    save_sessions(current_sessions)
     
+    # 1. メモリを更新
     st.session_state.sessions = current_sessions
     st.session_state.current_session_id = new_id
     st.session_state.session_cost = 0.0  # コストリセット
+    
+    # 2. ファイルへ保存（バックアップ）
+    save_sessions(st.session_state.sessions)
     st.rerun()
 
 # =========================
