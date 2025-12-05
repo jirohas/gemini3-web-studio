@@ -321,6 +321,38 @@ def compact_newlines(text: str) -> str:
     text = re.sub(r'(\|[^\n]+\|)\n{3,}', r'\1\n\n', text)
     return text
 
+def trim_history(messages: list, max_tokens: int = 25000) -> list:
+    """
+    Vertex AI Quotaエラー対策: 履歴のトークン数を制限
+    新しいメッセージを優先し、古いメッセージを自動的に切り捨てる
+    
+    Args:
+        messages: メッセージ履歴
+        max_tokens: 推定最大トークン数（デフォルト25000 = Gemini 3 Proで余裕）
+    
+    Returns:
+        トリムされたメッセージ履歴
+    """
+    if not messages:
+        return []
+    
+    trimmed = []
+    current_est_tokens = 0
+    
+    # 新しい順にスキャン（最新を優先保持）
+    for msg in reversed(messages):
+        content = msg.get("content", "")
+        # 簡易トークン推定: 日本語1文字≒1.5トークン、安全側で文字数×2
+        est_tokens = len(content) * 2
+        
+        if current_est_tokens + est_tokens > max_tokens:
+            break  # 上限を超えたらストップ（古いメッセージは切り捨て）
+        
+        trimmed.insert(0, msg)  # 先頭に挿入して順序を維持
+        current_est_tokens += est_tokens
+    
+    return trimmed
+
 def extract_facts_and_risks(client, model_id: str, research_text: str) -> tuple[str, str, dict]:
     """
     Phase B以前の後方互換用（v1）：事実とリスクをMarkdown形式で抽出
@@ -3265,8 +3297,8 @@ AI: {final_answer[:1000]}
 """
                     suggestion_resp = client.models.generate_content(
                         model="gemini-2.5-flash",
-                        contents=[{{"role": "user", "parts": [{{"text": suggestion_prompt}}]}}],
-                        config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=512)  # 品質向上のためトークン増加
+                        contents=[{"role": "user", "parts": [{"text": suggestion_prompt}]}],
+                        config=types.GenerateContentConfig(temperature=0.7, max_output_tokens=512)
                     )
                     
                     # 出力を整形してから追加
