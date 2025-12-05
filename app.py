@@ -1857,26 +1857,32 @@ with st.sidebar:
     AWS_BUDGET_USD = 100.0
     AWS_COST_PER_RUN = 0.2  # Claude 4.5 Sonnet 1回あたり平均
     
-    # 使用量（実際はusage_statsから分離すべきだが、簡易版として比率で推定）
-    total_cost = usage_stats['total_cost_usd']
-    gemini_cost_est = total_cost * 0.85  # 約85%がGemini
-    aws_cost_est = total_cost * 0.15  # 約15%がAWS (Claude)
+    # 実際の使用量: 手動入力(円) + セッション累計
+    # 手動入力はGoogle Cloud Consoleの実際の請求額を入力
+    actual_gemini_cost_jpy = manual_cost  # 手動入力は主にGemini分
+    actual_gemini_cost_usd = actual_gemini_cost_jpy / JPY_USD_RATE
+    session_cost = usage_stats['total_cost_usd']
     
-    gemini_remaining = GEMINI_BUDGET_USD - gemini_cost_est
-    aws_remaining = AWS_BUDGET_USD - aws_cost_est
+    # Gemini: 手動入力 + セッション分の85%
+    gemini_total = actual_gemini_cost_usd + (session_cost * 0.85)
+    gemini_remaining = max(0, GEMINI_BUDGET_USD - gemini_total)
     gemini_runs = max(0, int(gemini_remaining / GEMINI_COST_PER_RUN))
+    
+    # AWS: セッション分の15%のみ（無料枠なので手動入力は主にGemini）
+    aws_cost_est = session_cost * 0.15
+    aws_remaining = max(0, AWS_BUDGET_USD - aws_cost_est)
     aws_runs = max(0, int(aws_remaining / AWS_COST_PER_RUN))
     
-    # プログレスバー（全体）
-    progress_value = min(1.0, max(0.0, total_cost / (GEMINI_BUDGET_USD + AWS_BUDGET_USD)))
+    # プログレスバー（Gemini基準）
+    progress_value = min(1.0, max(0.0, gemini_total / GEMINI_BUDGET_USD))
     st.progress(progress_value)
     
-    # コンパクト表示（st.captionで小さく）
-    st.caption(f"**Gemini**: 残${gemini_remaining:.0f} (あと{gemini_runs}回) | **AWS**: 残${aws_remaining:.0f} (あと{aws_runs}回)")
-    st.caption(f"💰 合計使用: ${total_cost:.2f} / ${GEMINI_BUDGET_USD + AWS_BUDGET_USD:.0f}")
+    # コンパクト表示（st.markdownで小さいフォント）
+    st.markdown(f"<small>Gemini: 残${gemini_remaining:.0f} (あと{gemini_runs}回) | AWS: 残${aws_remaining:.0f} (あと{aws_runs}回)</small>", unsafe_allow_html=True)
+    st.markdown(f"<small>💰 Gemini使用: ${gemini_total:.1f}/$300 (手動¥{manual_cost:.0f} + セッション${session_cost:.2f})</small>", unsafe_allow_html=True)
     
-    if gemini_runs < 20 or aws_runs < 50:
-        st.warning("⚠️ 予算が残りわずかです")
+    if gemini_runs < 20:
+        st.warning("⚠️ Gemini予算が残りわずかです")
     # ▲▲▲ AWS/Gemini別カウント ここまで ▲▲▲
     
     st.link_button("💰 Google Cloud Console", "https://console.cloud.google.com/welcome/new?_gl=1*kmr691*_up*MQ..&gclid=CjwKCAiAraXJBhBJEiwAjz7MZT0vQsfDK5zunRBCQmuN5iczgI4bP1lHo1Tcrcbqu1KCBE1D22GpFhoCOdgQAvD_BwE&gclsrc=aw.ds&hl=ja&authuser=5&project=sigma-task-479704-r6")
