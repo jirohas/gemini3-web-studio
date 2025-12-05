@@ -3601,6 +3601,33 @@ function copyToClipboard(elementId) {{
                 # 合計
                 total_cost = st.session_state.session_cost
                 st.markdown(f"**合計セッションコスト**: ${total_cost:.4f}")
+                
+                # ▼▼▼ 回答コピーボタン（比較用） ▼▼▼
+                st.markdown("---")
+                if st.button("📋 回答をコピー", key="copy_response_btn"):
+                    import pyperclip
+                    try:
+                        pyperclip.copy(final_answer)
+                        st.success("✓ クリップボードにコピーしました")
+                    except:
+                        # pyperclipがない場合はJavaScript経由
+                        pass
+                
+                # JavaScript版コピー（フォールバック）
+                copy_id = f"response_{datetime.datetime.now().strftime('%H%M%S')}"
+                st.markdown(f"""
+<div id="{copy_id}" style="display:none;">{final_answer.replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')}</div>
+<button onclick="
+    const text = document.getElementById('{copy_id}').innerText;
+    navigator.clipboard.writeText(text).then(() => {{
+        this.textContent = '✓ コピー完了';
+        setTimeout(() => {{ this.textContent = '📋 回答全文をコピー（JS版）'; }}, 2000);
+    }});
+" style="padding: 8px 16px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 14px;">
+📋 回答全文をコピー（JS版）
+</button>
+""", unsafe_allow_html=True)
+                # ▲▲▲ 回答コピーボタン ここまで ▲▲▲
                     
                 # ▲▲▲ 処理履歴追加ここまで ▲▲▲
 
