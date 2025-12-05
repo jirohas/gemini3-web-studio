@@ -1464,9 +1464,9 @@ with st.sidebar:
         # ボタンを縦に配置
         if st.button("✨ 提案 (直近)", use_container_width=True):
             with st.spinner("生成中..."):
-                # client already initialized at startup
+                rec_client = get_gemini_client()  # Get client for recommendations
                 user_profile = load_user_profile()
-                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
+                rec_text, usage = generate_recommendations(rec_client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="normal")
                 
                 # コスト加算
                 cost = calculate_cost("gemini-2.5-flash", usage["input_tokens"], usage["output_tokens"])
@@ -1485,9 +1485,9 @@ with st.sidebar:
 
         if st.button("🔥 提案 (全履歴)", use_container_width=True):
             with st.spinner("全履歴分析中..."):
-                # client already initialized at startup
+                rec_client = get_gemini_client()  # Get client for recommendations
                 user_profile = load_user_profile()
-                rec_text, usage = generate_recommendations(client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
+                rec_text, usage = generate_recommendations(rec_client, st.session_state.sessions, st.session_state.current_session_id, user_profile, mode="deep")
                 
                 # コスト加算 (gemini-2.0-flash)
                 cost = calculate_cost("gemini-2.0-flash", usage["input_tokens"], usage["output_tokens"])
