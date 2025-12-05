@@ -1990,85 +1990,8 @@ st.markdown("""
 
 
 # =========================
-# Initialize Gemini Client
+# Initialize Gemini Client (function defined at line 81)
 # =========================
-@st.cache_resource
-def get_gemini_client():
-    """
-    Gemini クライアントを初期化（Streamlit Secrets対応）
-    
-    Streamlit Cloud: st.secretsからサービスアカウント認証情報を使用
-    ローカル開発: Application Default Credentials
-    """
-    try:
-        # Get project ID from environment variable or secrets
-        project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        
-        # Streamlit Cloud: Service Account via secrets
-        if "GOOGLE_CREDENTIALS" in st.secrets:
-            from google.oauth2 import service_account
-            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
-            
-            # Use project_id from credentials if not set
-            if not project_id:
-                project_id = creds_dict.get("project_id")
-            
-            scoped_creds = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            
-            print(f"[DEBUG] Using secrets auth with project_id: {project_id}")
-            
-            return genai.Client(
-                vertexai=True,
-                project=project_id,
-                location=VERTEX_LOCATION,
-                credentials=scoped_creds
-            )
-        else:
-            # No secrets - use environment variables
-            print(f"[DEBUG] No GOOGLE_CREDENTIALS in secrets, using env vars")
-            
-            if not project_id:
-                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
-            
-            # Check if we have service account JSON in env
-            if "GOOGLE_APPLICATION_CREDENTIALS_JSON" in os.environ:
-                import json
-                from google.oauth2 import service_account
-                
-                creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-                creds_dict = json.loads(creds_json)
-                
-                scoped_creds = service_account.Credentials.from_service_account_info(
-                    creds_dict,
-                    scopes=["https://www.googleapis.com/auth/cloud-platform"]
-                )
-                
-                print(f"[DEBUG] Using env JSON auth with project_id: {project_id}")
-                
-                return genai.Client(
-                    vertexai=True,
-                    project=project_id,
-                    location=VERTEX_LOCATION,
-                    credentials=scoped_creds
-                )
-            else:
-                # Application Default Credentials
-                print(f"[DEBUG] Using ADC with project_id: {project_id}")
-                
-                return genai.Client(
-                    vertexai=True,
-                    project=project_id,
-                    location=VERTEX_LOCATION,
-                )
-    except Exception as e:
-        print(f"❌ Gemini Client初期化エラー: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
 # Initialize client
 client = get_gemini_client()
 
