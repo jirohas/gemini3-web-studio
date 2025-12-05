@@ -1444,13 +1444,14 @@ with st.sidebar:
         with st.expander("モード設定(多層)", expanded=True):
             mode_type = st.radio(
                 "タイプ",
-                ["🚀 本気MAX (推奨)", "🧪 ベータ版", "⚡ 軽量版", "その他"],
+                ["🚀 本気MAX", "🧪 ベータ", "⚡ 軽量", "その他"],
                 index=0,
                 horizontal=True,
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                help="本気MAX=旧gr強化+msAz | ベータ=旧gr通常 | 軽量=旧gr強化"
             )
             
-            if mode_type == "🚀 本気MAX (推奨)":
+            if mode_type == "🚀 本気MAX":
                 # ▼▼▼ メニュー簡素化: 本気MAXをメインに ▼▼▼
                 st.markdown("### 🚀 推奨モード")
                 response_mode = st.radio(
@@ -1481,7 +1482,7 @@ with st.sidebar:
                     if beta_mode != "使用しない":
                         response_mode = beta_mode
                 # ▲▲▲ メニュー簡素化 ここまで ▲▲▲
-            elif mode_type == "🧪 ベータ版":
+            elif mode_type == "🧪 ベータ":
                 response_mode = st.radio(
                     "ベータモード",
                     [
@@ -1491,7 +1492,7 @@ with st.sidebar:
                     ],
                     index=0
                 )
-            elif mode_type == "⚡ 軽量版":
+            elif mode_type == "⚡ 軽量":
                 response_mode = st.radio(
                     "軽量モード",
                     [
