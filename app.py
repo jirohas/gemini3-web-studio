@@ -1307,52 +1307,75 @@ def switch_session(session_id):
 
 def update_current_session_messages(messages):
     """
-    履歴安定化版: session_stateをマスターとして扱い、ファイルは保存のみ
-    ❌ 修正前: load_sessions()で毎回ファイルから読み込み → 先祖返り発生
-    ⭕ 修正後: session_stateを直接更新 → ファイルはバックアップとして保存
+    履歴安定化版（GPT 5.1 Pro強化）: 
+    - 必ず有効なセッションを確保してから書き込む
+    - messages はコピーして保存（参照汚染防止）
     """
-    if st.session_state.current_session_id:
-        # ❌ 削除: current_sessions = load_sessions()  ← これが先祖返りの原因
-        
-        # ⭕ session_stateをマスターとして使用
-        if "sessions" not in st.session_state or not st.session_state.sessions:
-            st.session_state.sessions = load_sessions()  # 起動時のみ
-        
-        current_sessions = st.session_state.sessions
-        target_index = -1
-        
-        for i, session in enumerate(current_sessions):
-            if session["id"] == st.session_state.current_session_id:
-                session["messages"] = messages
-                if session["title"] == "新しいチャット" and len(messages) > 0:
-                    first_msg = messages[0]["content"]
-                    session["title"] = (first_msg[:20] + "...") if len(first_msg) > 20 else first_msg
-                session["timestamp"] = datetime.datetime.now().isoformat()
-                target_index = i
-                break
-        
-        if target_index != -1:
-            # 最新のセッションをリストの先頭に移動
-            updated_session = current_sessions.pop(target_index)
-            current_sessions.insert(0, updated_session)
-        
-        # 1. メモリを即時更新（これで画面上の表示は安定する）
-        st.session_state.sessions = current_sessions
-        
-        # 2. ファイルへ保存（バックアップ）
-        save_sessions(current_sessions)
+    # ここで「現在セッションが必ず1つある」状態を確保
+    current_session, idx = ensure_current_session()
+    sessions = st.session_state.sessions
+    
+    # コピーを保存
+    current_session["messages"] = list(messages)
+    
+    # タイトル更新
+    if current_session["title"] == "新しいチャット" and messages:
+        first_msg = messages[0]["content"]
+        current_session["title"] = (first_msg[:20] + "...") if len(first_msg) > 20 else first_msg
+    
+    # タイムスタンプ更新
+    current_session["timestamp"] = datetime.datetime.now().isoformat()
+    
+    # 先頭に移動（idx が 0 でなければ）
+    if idx > 0:
+        updated = sessions.pop(idx)
+        sessions.insert(0, updated)
+    
+    st.session_state.sessions = sessions
+    save_sessions(sessions)
 
 def get_current_messages():
     """
-    コピーを返す版: 参照を返すと意図しない変更が起きる
-    ❌ 修正前: return session["messages"]  ← 参照を返す
-    ⭕ 修正後: return list(...)  ← コピーを返す
+    コピーを返す版 + セッション自動復旧版
+    GPT 5.1 Proの指摘: current_session_idがNoneや無効でも安全に動作
     """
-    if st.session_state.current_session_id:
-        for session in st.session_state.sessions:
-            if session["id"] == st.session_state.current_session_id:
-                return list(session["messages"])  # コピーを返す（重要）
-    return []
+    current_session, _ = ensure_current_session()
+    return list(current_session.get("messages", []))
+
+def ensure_current_session():
+    """
+    GPT 5.1 Pro推奨: 常に「存在する現在セッション」が1つだけある状態を保証
+    
+    - sessions が未初期化なら load_sessions() する
+    - current_session_id が None / 空文字 / 見つからない場合は新しいセッションを作る
+    
+    戻り値: (current_session_dict, index_in_list)
+    """
+    if "sessions" not in st.session_state:
+        st.session_state.sessions = load_sessions()
+    
+    sessions = st.session_state.sessions or []
+    current_id = st.session_state.get("current_session_id")
+    
+    # すでに有効なセッションが選択されているか？
+    if current_id:
+        for i, s in enumerate(sessions):
+            if s["id"] == current_id:
+                return s, i
+    
+    # なければ新規作成
+    new_id = str(uuid.uuid4())
+    new_session = {
+        "id": new_id,
+        "title": "新しいチャット",
+        "timestamp": datetime.datetime.now().isoformat(),
+        "messages": [],
+    }
+    sessions.insert(0, new_session)
+    st.session_state.sessions = sessions
+    st.session_state.current_session_id = new_id
+    save_sessions(sessions)
+    return new_session, 0
 
 def delete_session(session_id):
     """
@@ -1419,9 +1442,14 @@ def branch_session():
 if "sessions" not in st.session_state:
     st.session_state.sessions = load_sessions()
 
-if "current_session_id" not in st.session_state:
-    # Always create a new session when the app starts
-    create_new_session()
+# GPT 5.1 Pro指摘修正: 'not in' だとNoneでも通過してしまう
+# None / 空文字 / 不正なIDも「未選択」として扱う
+if not st.session_state.get("current_session_id"):
+    # 履歴があれば最新を復元、なければ新規作成
+    if st.session_state.sessions and len(st.session_state.sessions) > 0:
+        st.session_state.current_session_id = st.session_state.sessions[0]["id"]
+    else:
+        create_new_session()
 
 if "session_cost" not in st.session_state:
     st.session_state.session_cost = 0.0
