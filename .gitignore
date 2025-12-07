@@ -4,11 +4,20 @@
 # 環境変数
 .env
 
+# 秘密鍵/証明書（誤コミット防止）
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+
 # セッションデータ
 usage.json
 sessions.json
 usage_stats.json
 chat_sessions.json
+chat_history.json
 user_profile.json
 manual_cost.json
 

@@ -28,6 +28,7 @@ pip install -r requirements.txt
 
 ```toml
 APP_PASSWORD = "your-password"
+SECRET_TOKEN = "your-url-token"  # 任意の長く推測されにくい値を設定
 VERTEX_PROJECT = "your-gcp-project-id"
 VERTEX_LOCATION = "us-central1"
 
@@ -37,6 +38,9 @@ AWS_SECRET_ACCESS_KEY = "your-aws-secret"
 OPENROUTER_API_KEY = "your-openrouter-key"
 GITHUB_TOKEN = "your-github-token"
 ```
+
+- `APP_PASSWORD` は必須です。レポジトリにデフォルト値は含まれていないため、必ず強力でユニークなパスワードを設定してください。
+- `SECRET_TOKEN` を設定すると、`?auth=...` のURLトークンによる一時認証が利用できます（未設定の場合は無効化されます）。
 
 ## 🏃 実行
 
