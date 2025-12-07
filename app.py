@@ -1467,8 +1467,11 @@ stop_generation = usage_stats["total_cost_usd"] >= MAX_BUDGET_USD
 # =========================
 
 with st.sidebar:
+    # 🏠 ポータルに戻る
+    st.link_button("🏠 ポータルに戻る", "https://aijirohas.streamlit.app/", use_container_width=True)
+    
     # 🔐 ログアウトボタン
-    if st.button("🔒 ログアウト", width="stretch"):
+    if st.button("🔒 ログアウト", use_container_width=True):
         st.session_state.authenticated = False
         st.query_params.clear()  # URLトークンも削除
         st.rerun()
