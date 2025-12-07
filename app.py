@@ -36,22 +36,29 @@ st.set_page_config(page_title="Gemini 3 Web Studio", layout="wide")
 
 # 🔐 パスワードロック + URLトークン永続化
 # パスワードとトークンを環境変数から取得
-try:
-    if "APP_PASSWORD" in st.secrets:
-        APP_PASSWORD = st.secrets["APP_PASSWORD"]
-        SECRET_TOKEN = st.secrets.get("SECRET_TOKEN", "access_granted_default")
-    else:
-        APP_PASSWORD = os.getenv("APP_PASSWORD", "***REMOVED***")  # フォールバック（開発用）
-        SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_***REMOVED***")
-except:
-    APP_PASSWORD = os.getenv("APP_PASSWORD", "***REMOVED***")
-    SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_***REMOVED***")
+def _resolve_auth_value(key: str):
+    """st.secrets > environment の順で認証関連値を取得"""
+    if key in st.secrets:
+        return st.secrets[key]
+    return os.getenv(key)
+
+
+APP_PASSWORD = _resolve_auth_value("APP_PASSWORD")
+SECRET_TOKEN = _resolve_auth_value("SECRET_TOKEN")
+
+if not APP_PASSWORD:
+    st.error("環境変数 APP_PASSWORD が設定されていません。セキュリティ上、必須です。")
+    st.stop()
+
+if not SECRET_TOKEN:
+    st.info("SECRET_TOKEN が未設定のため、URLトークン認証は無効化されます。")
+    SECRET_TOKEN = None
 
 # 1. URLトークンチェック
 query_params = st.query_params
 url_token = query_params.get("auth", None)
 
-if url_token == SECRET_TOKEN:
+if SECRET_TOKEN and url_token == SECRET_TOKEN:
     st.session_state.authenticated = True
 elif "authenticated" not in st.session_state:
     st.session_state.authenticated = False

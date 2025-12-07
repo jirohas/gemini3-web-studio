@@ -9,6 +9,7 @@ usage.json
 sessions.json
 usage_stats.json
 chat_sessions.json
+chat_history.json
 user_profile.json
 manual_cost.json
 
