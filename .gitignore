@@ -51,3 +51,11 @@ Thumbs.db
 
 # Temporary files
 *.tmp
+
+# 秘密鍵/証明書 (誤コミット防止)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
