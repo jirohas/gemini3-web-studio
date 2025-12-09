@@ -41,11 +41,11 @@ try:
         APP_PASSWORD = st.secrets["APP_PASSWORD"]
         SECRET_TOKEN = st.secrets.get("SECRET_TOKEN", "access_granted_default")
     else:
-        APP_PASSWORD = os.getenv("APP_PASSWORD", "198510")  # フォールバック（開発用）
-        SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_198510")
+        APP_PASSWORD = os.getenv("APP_PASSWORD", "qqq")  # フォールバック（開発用）
+        SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_qqq")
 except:
-    APP_PASSWORD = os.getenv("APP_PASSWORD", "198510")
-    SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_198510")
+    APP_PASSWORD = os.getenv("APP_PASSWORD", "qqq")
+    SECRET_TOKEN = os.getenv("SECRET_TOKEN", "access_granted_qqq")
 
 # 1. URLトークンチェック
 query_params = st.query_params
